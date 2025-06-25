@@ -184,16 +184,21 @@ func runServerContainer(
 
 	// 5. Wait for the container to exit
 	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+
+	// Helper to stop the container gracefully
+	stopContainer := func() {
+		stopCtx := context.Background()
+		if err := cli.ContainerStop(stopCtx, resp.ID, container.StopOptions{}); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to stop container: %v\n", err)
+		}
+	}
+
 	select {
 	case err := <-errCh:
 		if err != nil {
 			// Ignore context canceled errors - these happen when user presses Ctrl+C
 			if errors.Is(err, context.Canceled) {
-				// Stop the container when context is canceled
-				stopCtx := context.Background()
-				if err := cli.ContainerStop(stopCtx, resp.ID, container.StopOptions{}); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: failed to stop container: %v\n", err)
-				}
+				stopContainer()
 				return nil
 			}
 			return fmt.Errorf("error waiting for container: %w", err)
@@ -203,19 +208,12 @@ func runServerContainer(
 			return fmt.Errorf("%w: %d", ErrContainerNonZeroExit, status.StatusCode)
 		}
 	case <-stdinClosed:
-		// Stdin was closed (EOF) - stop the container gracefully
-		// This happens when Claude Code terminates
-		stopCtx := context.Background()
-		if err := cli.ContainerStop(stopCtx, resp.ID, container.StopOptions{}); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to stop container: %v\n", err)
-		}
+		// Stdin was closed (EOF) - Claude Code terminated
+		stopContainer()
 		return nil
 	case <-ctx.Done():
 		// Context was canceled (Ctrl+C pressed)
-		stopCtx := context.Background()
-		if err := cli.ContainerStop(stopCtx, resp.ID, container.StopOptions{}); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to stop container: %v\n", err)
-		}
+		stopContainer()
 		return nil
 	}
 
