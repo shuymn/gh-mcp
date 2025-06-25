@@ -248,7 +248,20 @@ func TestRunServerContainer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := runServerContainer(t.Context(), tt.mock, tt.env, "test-image")
+			// Use io.Pipe to create a blocking reader that won't EOF immediately
+			// This prevents the stdinClosed channel from firing before error cases
+			pipeReader, pipeWriter := io.Pipe()
+			// Close the writer when test completes to clean up the goroutine
+			t.Cleanup(func() {
+				pipeWriter.Close()
+			})
+
+			streams := &ioStreams{
+				in:  pipeReader,      // Blocking stdin
+				out: &bytes.Buffer{}, // Capture stdout
+				err: &bytes.Buffer{}, // Capture stderr
+			}
+			err := runServerContainer(t.Context(), tt.mock, tt.env, "test-image", streams)
 
 			if tt.wantErr != "" {
 				if err == nil {
