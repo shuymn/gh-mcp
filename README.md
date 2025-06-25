@@ -10,7 +10,6 @@ A GitHub CLI extension that seamlessly runs the [github-mcp-server](https://gith
 
 - [GitHub CLI (`gh`)](https://cli.github.com/) installed and authenticated (`gh auth login`)
 - [Docker](https://www.docker.com/) installed and running
-- Go 1.24.4 or later (only needed for development)
 
 ## Installation
 
@@ -73,60 +72,10 @@ GITHUB_READ_ONLY=1 GITHUB_TOOLSETS="repos,issues" gh mcp
 
 ## How It Works
 
-1. **Authentication**: The extension uses the `github.com/cli/go-gh/v2` library to access your existing `gh` CLI authentication, supporting both github.com and GitHub Enterprise instances.
-
-2. **Container Management**: It uses the Docker SDK to:
-   - Check if the `ghcr.io/github/github-mcp-server:latest` image exists locally
-   - Pull the image if needed (with progress feedback)
-   - Create and run a container with your GitHub token and host as environment variables
-   - Set up bidirectional I/O streaming between your terminal and the container
-
-3. **Cleanup**: The container is automatically removed when you exit (using Docker's `--rm` flag equivalent).
-
-## Development
-
-### Building from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/shuymn/gh-mcp.git
-cd gh-mcp
-
-# Build the extension
-go build -o gh-mcp ./cmd/gh-mcp
-
-# Install locally as a gh extension
-gh extension install .
-```
-
-### Running Tests
-
-```bash
-# Run all tests
-go test ./...
-
-# Run with verbose output
-go test -v ./...
-
-# Run with coverage
-go test -cover ./...
-```
-
-### Project Structure
-
-```
-gh-mcp/
-├── cmd/gh-mcp/
-│   ├── main.go       # Entry point and orchestration
-│   ├── auth.go       # GitHub authentication via gh CLI
-│   ├── auth_test.go  # Unit tests for auth
-│   ├── docker.go     # Docker container management
-│   ├── docker_test.go # Unit tests for docker
-│   └── main_test.go  # Unit tests for main orchestration
-├── go.mod           # Go module definition
-├── go.sum           # Dependency checksums
-└── README.md        # This file
-```
+1. The extension retrieves your GitHub credentials from your existing `gh` CLI authentication
+2. It pulls and runs the official `github-mcp-server` Docker image
+3. Your credentials are securely passed to the container
+4. The container is automatically cleaned up when you exit
 
 ## Troubleshooting
 
@@ -154,6 +103,8 @@ Check the container logs or ensure the MCP server image is working correctly.
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+For development information, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
