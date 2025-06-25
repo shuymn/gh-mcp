@@ -32,7 +32,7 @@ func TestGetAuthDetailsWithAuth(t *testing.T) {
 				tokenForHost: "test-token-123",
 			},
 			want: &authDetails{
-				Host:  "github.com",
+				Host:  "https://github.com",
 				Token: "test-token-123",
 			},
 		},
@@ -59,7 +59,29 @@ func TestGetAuthDetailsWithAuth(t *testing.T) {
 				tokenForHost: "enterprise-token",
 			},
 			want: &authDetails{
-				Host:  "github.enterprise.com",
+				Host:  "https://github.enterprise.com",
+				Token: "enterprise-token",
+			},
+		},
+		{
+			name: "host already has https prefix",
+			mock: &mockAuth{
+				defaultHost:  "https://github.enterprise.com",
+				tokenForHost: "enterprise-token",
+			},
+			want: &authDetails{
+				Host:  "https://github.enterprise.com",
+				Token: "enterprise-token",
+			},
+		},
+		{
+			name: "host already has http prefix",
+			mock: &mockAuth{
+				defaultHost:  "http://github.enterprise.com",
+				tokenForHost: "enterprise-token",
+			},
+			want: &authDetails{
+				Host:  "http://github.enterprise.com",
 				Token: "enterprise-token",
 			},
 		},
