@@ -32,6 +32,21 @@ Add this to your MCP client configuration:
 }
 ```
 
+With environment variables:
+
+```json
+{
+  "github": {
+    "command": "gh",
+    "args": ["mcp"],
+    "env": {
+      "GITHUB_TOOLSETS": "repos,issues,pull_requests",
+      "GITHUB_READ_ONLY": "1"
+    }
+  }
+}
+```
+
 ### Using with Claude Code
 
 To add this as an MCP server to Claude Code:
@@ -40,7 +55,11 @@ To add this as an MCP server to Claude Code:
 claude mcp add-json github '{"command":"gh","args":["mcp"]}'
 ```
 
-This will configure Claude Code to use `gh-mcp` as the GitHub MCP server.
+With environment variables:
+
+```bash
+claude mcp add-json github '{"command":"gh","args":["mcp"],"env":{"GITHUB_TOOLSETS":"repos,issues","GITHUB_READ_ONLY":"1"}}'
+```
 
 ### Running Directly
 
