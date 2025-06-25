@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 
 	"github.com/containerd/containerd/errdefs"
@@ -69,11 +70,11 @@ func newDockerClient() (dockerClientInterface, error) {
 
 // ensureImage checks if the image exists locally and pulls it if necessary
 func ensureImage(ctx context.Context, cli dockerClientInterface, imageName string) error {
-	fmt.Printf("Checking for image: %s...\n", imageName)
+	slog.Info("Checking for image", "image", imageName)
 
 	_, _, err := cli.ImageInspectWithRaw(ctx, imageName)
 	if err == nil {
-		fmt.Println("✓ Image found locally.")
+		slog.Info("✓ Image found locally")
 		return nil // Image exists
 	}
 
@@ -81,7 +82,7 @@ func ensureImage(ctx context.Context, cli dockerClientInterface, imageName strin
 		return fmt.Errorf("failed to inspect image: %w", err)
 	}
 
-	fmt.Printf("⬇️  Pulling image (this may take a moment)...\n")
+	slog.Info("⬇️  Pulling image (this may take a moment)...")
 	reader, err := cli.ImagePull(ctx, imageName, image.PullOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to pull docker image '%s': %w", imageName, err)
@@ -93,7 +94,7 @@ func ensureImage(ctx context.Context, cli dockerClientInterface, imageName strin
 		return fmt.Errorf("failed to read image pull progress: %w", err)
 	}
 
-	fmt.Println("\n✓ Image pulled successfully.")
+	slog.Info("✓ Image pulled successfully")
 	return nil
 }
 
@@ -137,7 +138,7 @@ func runServerContainer(
 	if err := cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
-	fmt.Println("🚀 Starting github-mcp-server in Docker. Press Ctrl+C to exit.")
+	slog.Info("🚀 Starting github-mcp-server in Docker. Press Ctrl+C to exit.")
 
 	// 4. Set up concurrent I/O streaming
 	// Channel to signal when stdin is closed
@@ -153,7 +154,7 @@ func runServerContainer(
 			case <-ctx.Done():
 				// Context was canceled, we're shutting down - ignore error
 			default:
-				fmt.Fprintf(os.Stderr, "Error reading from container: %v\n", err)
+				slog.Error("Error reading from container", "err", err)
 			}
 		}
 	}()
@@ -169,7 +170,7 @@ func runServerContainer(
 			case <-ctx.Done():
 				// Context was canceled, we're shutting down - ignore error
 			default:
-				fmt.Fprintf(os.Stderr, "Error writing to container: %v\n", err)
+				slog.Error("Error writing to container", "err", err)
 			}
 		}
 		if err := hijackedResp.CloseWrite(); err != nil {
@@ -177,7 +178,7 @@ func runServerContainer(
 			case <-ctx.Done():
 				// Context was canceled, we're shutting down - ignore error
 			default:
-				fmt.Fprintf(os.Stderr, "Error closing write to container: %v\n", err)
+				slog.Error("Error closing write to container", "err", err)
 			}
 		}
 	}()
@@ -189,7 +190,7 @@ func runServerContainer(
 	stopContainer := func() {
 		stopCtx := context.Background()
 		if err := cli.ContainerStop(stopCtx, resp.ID, container.StopOptions{}); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to stop container: %v\n", err)
+			slog.Warn("Failed to stop container", "err", err)
 		}
 	}
 
