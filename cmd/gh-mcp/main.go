@@ -42,6 +42,7 @@ type runner interface {
 		cli dockerClientInterface,
 		env []string,
 		imageName string,
+		streams *ioStreams,
 	) error
 }
 
@@ -78,8 +79,9 @@ func (r *realRunner) runContainer(
 	cli dockerClientInterface,
 	env []string,
 	imageName string,
+	streams *ioStreams,
 ) error {
-	return runServerContainer(ctx, cli, env, imageName)
+	return runServerContainer(ctx, cli, env, imageName, streams)
 }
 
 func run(ctx context.Context) error {
@@ -131,7 +133,7 @@ func runWithRunner(ctx context.Context, r runner) error {
 
 	// 5. Run the container and stream I/O
 	slog.Info("✅ Ready! Starting MCP server...")
-	if err := r.runContainer(ctx, cli, env, mcpImage); err != nil {
+	if err := r.runContainer(ctx, cli, env, mcpImage, defaultIOStreams()); err != nil {
 		return err
 	}
 

@@ -47,6 +47,7 @@ func (m *mockRunner) runContainer(
 	_ dockerClientInterface,
 	env []string,
 	_ string,
+	_ *ioStreams,
 ) error {
 	m.capturedEnv = env
 	return m.runContainerErr

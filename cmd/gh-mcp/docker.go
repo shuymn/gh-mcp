@@ -18,6 +18,22 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
+// ioStreams holds the I/O streams for container communication
+type ioStreams struct {
+	in  io.Reader
+	out io.Writer
+	err io.Writer
+}
+
+// defaultIOStreams returns the default I/O streams using os.Std*
+func defaultIOStreams() *ioStreams {
+	return &ioStreams{
+		in:  os.Stdin,
+		out: os.Stdout,
+		err: os.Stderr,
+	}
+}
+
 // Define static errors
 var (
 	// ErrContainerNonZeroExit is a sentinel error for container non-zero exit
@@ -104,6 +120,7 @@ func runServerContainer(
 	cli dockerClientInterface,
 	env []string,
 	imageName string,
+	streams *ioStreams,
 ) error {
 	// 1. Create the container
 	resp, err := cli.ContainerCreate(ctx, &container.Config{
@@ -141,7 +158,7 @@ func runServerContainer(
 	// Copy output from container to terminal
 	go func() {
 		// StdCopy demultiplexes the container's stdout and stderr streams.
-		_, err := stdcopy.StdCopy(os.Stdout, os.Stderr, hijackedResp.Reader)
+		_, err := stdcopy.StdCopy(streams.out, streams.err, hijackedResp.Reader)
 		if err != nil && !errors.Is(err, io.EOF) {
 			// Only log errors if context is not canceled
 			select {
@@ -155,7 +172,7 @@ func runServerContainer(
 
 	// Copy input from terminal to container
 	go func() {
-		_, err := io.Copy(hijackedResp.Conn, os.Stdin)
+		_, err := io.Copy(hijackedResp.Conn, streams.in)
 		// When stdin is closed (EOF), signal that we should stop
 		if err == nil || errors.Is(err, io.EOF) {
 			close(stdinClosed)
