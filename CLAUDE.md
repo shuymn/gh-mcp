@@ -60,7 +60,7 @@ go test -v ./...
 
 ## Architecture
 
-The project consists of three main components in `cmd/gh-mcp/`:
+The project consists of three main components:
 
 1. **Authentication (`auth.go`)**: 
    - Retrieves GitHub credentials from `gh` CLI using `github.com/cli/go-gh/v2`

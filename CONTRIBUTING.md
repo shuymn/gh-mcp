@@ -18,7 +18,7 @@ git clone https://github.com/shuymn/gh-mcp.git
 cd gh-mcp
 
 # Build the extension
-go build -o gh-mcp ./cmd/gh-mcp
+go build -o gh-mcp .
 
 # Or use make
 make build
@@ -66,13 +66,12 @@ make check
 
 ```
 gh-mcp/
-├── cmd/gh-mcp/
-│   ├── main.go        # Entry point and orchestration
-│   ├── auth.go        # GitHub authentication via gh CLI
-│   ├── auth_test.go   # Unit tests for auth
-│   ├── docker.go      # Docker container management
-│   ├── docker_test.go # Unit tests for docker
-│   └── main_test.go   # Unit tests for main orchestration
+├── main.go           # Entry point and orchestration
+├── auth.go           # GitHub authentication via gh CLI
+├── auth_test.go      # Unit tests for auth
+├── docker.go         # Docker container management
+├── docker_test.go    # Unit tests for docker
+├── main_test.go      # Unit tests for main orchestration
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml     # CI pipeline

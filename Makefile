@@ -1,6 +1,5 @@
 # gh-mcp Makefile
 BINARY_NAME := gh-mcp
-MAIN_PACKAGE := ./cmd/gh-mcp
 COVERAGE_FILE := coverage.out
 
 # Default target
@@ -9,7 +8,7 @@ COVERAGE_FILE := coverage.out
 # Build the binary
 .PHONY: build
 build: ## Build the binary
-	go build -o $(BINARY_NAME) $(MAIN_PACKAGE)
+	go build -o $(BINARY_NAME) .
 
 # Run tests with race detection and shuffle
 .PHONY: test
