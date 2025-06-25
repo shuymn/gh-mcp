@@ -1,0 +1,20 @@
+[tagpr]
+# The branch to release from
+releaseBranch = main
+
+# The version file to update
+# Since this is a Go project without a version file, we'll use "-" to only use git tags
+versionFile = -
+
+# Whether to add v-prefix to tags (e.g., v1.0.0)
+vPrefix = true
+
+# Whether to update changelog
+changelog = true
+
+# Create GitHub releases after tagging
+release = true
+
+# Labels for version bumps
+majorLabels = major
+minorLabels = minor
