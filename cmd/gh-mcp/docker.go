@@ -17,14 +17,35 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
+// Define static errors
+var (
+	// ErrContainerNonZeroExit is a sentinel error for container non-zero exit
+	ErrContainerNonZeroExit = errors.New("container exited with non-zero status")
+)
+
 // dockerClientInterface defines the methods we need from the Docker client for testing
 type dockerClientInterface interface {
 	ImageInspectWithRaw(ctx context.Context, imageID string) (image.InspectResponse, []byte, error)
 	ImagePull(ctx context.Context, refStr string, options image.PullOptions) (io.ReadCloser, error)
-	ContainerCreate(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *ocispec.Platform, containerName string) (container.CreateResponse, error)
-	ContainerAttach(ctx context.Context, container string, options container.AttachOptions) (types.HijackedResponse, error)
+	ContainerCreate(
+		ctx context.Context,
+		config *container.Config,
+		hostConfig *container.HostConfig,
+		networkingConfig *network.NetworkingConfig,
+		platform *ocispec.Platform,
+		containerName string,
+	) (container.CreateResponse, error)
+	ContainerAttach(
+		ctx context.Context,
+		container string,
+		options container.AttachOptions,
+	) (types.HijackedResponse, error)
 	ContainerStart(ctx context.Context, containerID string, options container.StartOptions) error
-	ContainerWait(ctx context.Context, containerID string, condition container.WaitCondition) (<-chan container.WaitResponse, <-chan error)
+	ContainerWait(
+		ctx context.Context,
+		containerID string,
+		condition container.WaitCondition,
+	) (<-chan container.WaitResponse, <-chan error)
 	Close() error
 }
 
@@ -37,7 +58,10 @@ type realDockerClient struct {
 func newDockerClient() (dockerClientInterface, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return nil, fmt.Errorf("failed to create docker client: %w. Is the Docker daemon running?", err)
+		return nil, fmt.Errorf(
+			"failed to create docker client: %w. Is the Docker daemon running?",
+			err,
+		)
 	}
 	return &realDockerClient{cli}, nil
 }
@@ -73,7 +97,12 @@ func ensureImage(ctx context.Context, cli dockerClientInterface, imageName strin
 }
 
 // runServerContainer creates and runs the MCP server container with I/O streaming
-func runServerContainer(ctx context.Context, cli dockerClientInterface, env []string, imageName string) error {
+func runServerContainer(
+	ctx context.Context,
+	cli dockerClientInterface,
+	env []string,
+	imageName string,
+) error {
 	// 1. Create the container
 	resp, err := cli.ContainerCreate(ctx, &container.Config{
 		Image:        imageName,
@@ -125,7 +154,9 @@ func runServerContainer(ctx context.Context, cli dockerClientInterface, env []st
 		if err != nil && !errors.Is(err, io.EOF) {
 			fmt.Fprintf(os.Stderr, "Error writing to container: %v\n", err)
 		}
-		hijackedResp.CloseWrite() // Signal end of input
+		if err := hijackedResp.CloseWrite(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error closing write to container: %v\n", err)
+		}
 	}()
 
 	// 5. Wait for the container to exit
@@ -137,7 +168,7 @@ func runServerContainer(ctx context.Context, cli dockerClientInterface, env []st
 		}
 	case status := <-statusCh:
 		if status.StatusCode != 0 {
-			return fmt.Errorf("container exited with non-zero status: %d", status.StatusCode)
+			return fmt.Errorf("%w: %d", ErrContainerNonZeroExit, status.StatusCode)
 		}
 	}
 

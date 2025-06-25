@@ -23,7 +23,7 @@ func (m *mockAuth) DefaultHost() (string, error) {
 	return m.defaultHost, m.defaultHostErr
 }
 
-func (m *mockAuth) TokenForHost(host string) (string, error) {
+func (m *mockAuth) TokenForHost(_ string) (string, error) {
 	return m.tokenForHost, m.tokenForHostErr
 }
 
@@ -51,7 +51,7 @@ func TestGetAuthDetailsWithAuth(t *testing.T) {
 				defaultHost:  "github.com",
 				tokenForHost: "",
 			},
-			wantErr: "not logged in to GitHub. Please run `gh auth login`",
+			wantErr: ErrNotLoggedIn.Error(),
 		},
 		{
 			name: "default host error",

@@ -1,9 +1,16 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/cli/go-gh/v2/pkg/auth"
+)
+
+// Define static errors
+var (
+	// ErrNotLoggedIn is returned when the user is not authenticated with GitHub
+	ErrNotLoggedIn = errors.New("not logged in to GitHub. Please run `gh auth login`")
 )
 
 // authDetails holds the user's active GitHub host and token.
@@ -54,7 +61,7 @@ func getAuthDetailsWithAuth(a authInterface) (*authDetails, error) {
 	}
 
 	if token == "" {
-		return nil, fmt.Errorf("not logged in to GitHub. Please run `gh auth login`")
+		return nil, ErrNotLoggedIn
 	}
 
 	return &authDetails{Host: host, Token: token}, nil
