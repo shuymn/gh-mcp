@@ -19,6 +19,16 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
+// Define static errors for testing
+var (
+	errInspectFailed = errors.New("inspect failed")
+	errPullFailed    = errors.New("pull failed")
+	errCreateFailed  = errors.New("create failed")
+	errAttachFailed  = errors.New("attach failed")
+	errStartFailed   = errors.New("start failed")
+	errWaitFailed    = errors.New("wait failed")
+)
+
 // mockDockerClient implements dockerClientInterface for testing
 type mockDockerClient struct {
 	imageInspectErr     error
@@ -108,7 +118,7 @@ func TestEnsureImage(t *testing.T) {
 		{
 			name: "image inspect error",
 			mock: &mockDockerClient{
-				imageInspectErr: errors.New("inspect failed"),
+				imageInspectErr: errInspectFailed,
 			},
 			imageName: "test-image:latest",
 			wantErr:   "failed to inspect image: inspect failed",
@@ -117,7 +127,7 @@ func TestEnsureImage(t *testing.T) {
 			name: "image pull error",
 			mock: &mockDockerClient{
 				imageInspectErr: &objectNotFoundError{object: "image", id: "test-image"},
-				imagePullErr:    errors.New("pull failed"),
+				imagePullErr:    errPullFailed,
 			},
 			imageName: "test-image:latest",
 			wantErr:   "failed to pull docker image 'test-image:latest': pull failed",
@@ -164,7 +174,7 @@ func TestRunServerContainer(t *testing.T) {
 		{
 			name: "container create error",
 			mock: &mockDockerClient{
-				containerCreateErr: errors.New("create failed"),
+				containerCreateErr: errCreateFailed,
 			},
 			wantErr: "failed to create container: create failed",
 		},
@@ -172,7 +182,7 @@ func TestRunServerContainer(t *testing.T) {
 			name: "container attach error",
 			mock: &mockDockerClient{
 				containerID:        "test-container-123",
-				containerAttachErr: errors.New("attach failed"),
+				containerAttachErr: errAttachFailed,
 			},
 			wantErr: "failed to attach to container: attach failed",
 		},
@@ -180,7 +190,7 @@ func TestRunServerContainer(t *testing.T) {
 			name: "container start error",
 			mock: &mockDockerClient{
 				containerID:       "test-container-123",
-				containerStartErr: errors.New("start failed"),
+				containerStartErr: errStartFailed,
 			},
 			wantErr: "failed to start container: start failed",
 		},
@@ -188,7 +198,7 @@ func TestRunServerContainer(t *testing.T) {
 			name: "container wait error",
 			mock: &mockDockerClient{
 				containerID:      "test-container-123",
-				containerWaitErr: errors.New("wait failed"),
+				containerWaitErr: errWaitFailed,
 			},
 			wantErr: "error waiting for container: wait failed",
 		},

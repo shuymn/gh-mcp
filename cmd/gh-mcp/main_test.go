@@ -6,6 +6,15 @@ import (
 	"testing"
 )
 
+// Define static errors for testing
+var (
+	errNotLoggedIn = errors.New("not logged in to GitHub. Please run `gh auth login`")
+	errDockerConnection = errors.New("failed to create docker client: connection refused. Is the Docker daemon running?")
+	errImageUnauthorized = errors.New("failed to pull docker image 'ghcr.io/github/github-mcp-server:latest': unauthorized")
+	errContainerNonZero = errors.New("container exited with non-zero status: 1")
+	errCaptureEnv = errors.New("capture env")
+)
+
 // mockRunner implements runner for testing
 type mockRunner struct {
 	authDetails     *authDetails
@@ -51,7 +60,7 @@ func TestRunWithRunner(t *testing.T) {
 		{
 			name: "auth error",
 			mock: &mockRunner{
-				authErr: errors.New("not logged in to GitHub. Please run `gh auth login`"),
+				authErr: errNotLoggedIn,
 			},
 			wantErr: "not logged in to GitHub. Please run `gh auth login`",
 		},
@@ -62,7 +71,7 @@ func TestRunWithRunner(t *testing.T) {
 					Host:  "github.com",
 					Token: "test-token",
 				},
-				dockerClientErr: errors.New("failed to create docker client: connection refused. Is the Docker daemon running?"),
+				dockerClientErr: errDockerConnection,
 			},
 			wantErr: "failed to create docker client: connection refused. Is the Docker daemon running?",
 		},
@@ -74,7 +83,7 @@ func TestRunWithRunner(t *testing.T) {
 					Token: "test-token",
 				},
 				dockerClient:   &mockDockerClient{},
-				ensureImageErr: errors.New("failed to pull docker image 'ghcr.io/github/github-mcp-server:latest': unauthorized"),
+				ensureImageErr: errImageUnauthorized,
 			},
 			wantErr: "failed to pull docker image 'ghcr.io/github/github-mcp-server:latest': unauthorized",
 		},
@@ -86,7 +95,7 @@ func TestRunWithRunner(t *testing.T) {
 					Token: "test-token",
 				},
 				dockerClient:    &mockDockerClient{},
-				runContainerErr: errors.New("container exited with non-zero status: 1"),
+				runContainerErr: errContainerNonZero,
 			},
 			wantErr: "container exited with non-zero status: 1",
 		},
@@ -141,7 +150,7 @@ func TestEnvironmentVariables(t *testing.T) {
 		},
 		dockerClient: &mockDockerClient{},
 		// Mock to capture environment variables
-		runContainerErr: errors.New("capture env"),
+		runContainerErr: errCaptureEnv,
 	}
 
 	ctx := context.Background()
