@@ -117,6 +117,14 @@ func (m *mockDockerClient) ContainerWait(
 	return statusCh, errCh
 }
 
+func (m *mockDockerClient) ContainerStop(
+	_ context.Context,
+	_ string,
+	_ container.StopOptions,
+) error {
+	return nil
+}
+
 func (m *mockDockerClient) Close() error {
 	return nil
 }

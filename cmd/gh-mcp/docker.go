@@ -46,6 +46,7 @@ type dockerClientInterface interface {
 		containerID string,
 		condition container.WaitCondition,
 	) (<-chan container.WaitResponse, <-chan error)
+	ContainerStop(ctx context.Context, containerID string, options container.StopOptions) error
 	Close() error
 }
 
@@ -144,7 +145,13 @@ func runServerContainer(
 		// StdCopy demultiplexes the container's stdout and stderr streams.
 		_, err := stdcopy.StdCopy(os.Stdout, os.Stderr, hijackedResp.Reader)
 		if err != nil && !errors.Is(err, io.EOF) {
-			fmt.Fprintf(os.Stderr, "Error reading from container: %v\n", err)
+			// Only log errors if context is not canceled
+			select {
+			case <-ctx.Done():
+				// Context was canceled, we're shutting down - ignore error
+			default:
+				fmt.Fprintf(os.Stderr, "Error reading from container: %v\n", err)
+			}
 		}
 	}()
 
@@ -152,10 +159,20 @@ func runServerContainer(
 	go func() {
 		_, err := io.Copy(hijackedResp.Conn, os.Stdin)
 		if err != nil && !errors.Is(err, io.EOF) {
-			fmt.Fprintf(os.Stderr, "Error writing to container: %v\n", err)
+			select {
+			case <-ctx.Done():
+				// Context was canceled, we're shutting down - ignore error
+			default:
+				fmt.Fprintf(os.Stderr, "Error writing to container: %v\n", err)
+			}
 		}
 		if err := hijackedResp.CloseWrite(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error closing write to container: %v\n", err)
+			select {
+			case <-ctx.Done():
+				// Context was canceled, we're shutting down - ignore error
+			default:
+				fmt.Fprintf(os.Stderr, "Error closing write to container: %v\n", err)
+			}
 		}
 	}()
 
@@ -164,12 +181,28 @@ func runServerContainer(
 	select {
 	case err := <-errCh:
 		if err != nil {
+			// Ignore context canceled errors - these happen when user presses Ctrl+C
+			if errors.Is(err, context.Canceled) {
+				// Stop the container when context is canceled
+				stopCtx := context.Background()
+				if err := cli.ContainerStop(stopCtx, resp.ID, container.StopOptions{}); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to stop container: %v\n", err)
+				}
+				return nil
+			}
 			return fmt.Errorf("error waiting for container: %w", err)
 		}
 	case status := <-statusCh:
 		if status.StatusCode != 0 {
 			return fmt.Errorf("%w: %d", ErrContainerNonZeroExit, status.StatusCode)
 		}
+	case <-ctx.Done():
+		// Context was canceled (Ctrl+C pressed)
+		stopCtx := context.Background()
+		if err := cli.ContainerStop(stopCtx, resp.ID, container.StopOptions{}); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to stop container: %v\n", err)
+		}
+		return nil
 	}
 
 	return nil
