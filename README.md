@@ -35,6 +35,42 @@ The extension will:
 
 Press `Ctrl+C` to gracefully shut down the server.
 
+## Configuration
+
+The extension passes through several environment variables to configure the MCP server:
+
+### Toolsets
+Control which GitHub API toolsets are available:
+
+```bash
+# Enable specific toolsets
+GITHUB_TOOLSETS="repos,issues,pull_requests" gh mcp
+
+# Enable all toolsets
+GITHUB_TOOLSETS="all" gh mcp
+```
+
+### Dynamic Toolset Discovery
+Enable dynamic toolset discovery (beta feature):
+
+```bash
+GITHUB_DYNAMIC_TOOLSETS=1 gh mcp
+```
+
+### Read-Only Mode
+Run the server in read-only mode to prevent modifications:
+
+```bash
+GITHUB_READ_ONLY=1 gh mcp
+```
+
+### Combining Options
+You can combine multiple options:
+
+```bash
+GITHUB_READ_ONLY=1 GITHUB_TOOLSETS="repos,issues" gh mcp
+```
+
 ## How It Works
 
 1. **Authentication**: The extension uses the `github.com/cli/go-gh/v2` library to access your existing `gh` CLI authentication, supporting both github.com and GitHub Enterprise instances.
