@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 
+	"github.com/containerd/containerd/errdefs"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
@@ -17,7 +19,7 @@ import (
 
 // dockerClientInterface defines the methods we need from the Docker client for testing
 type dockerClientInterface interface {
-	ImageInspectWithRaw(ctx context.Context, imageID string) (types.ImageInspect, []byte, error)
+	ImageInspectWithRaw(ctx context.Context, imageID string) (image.InspectResponse, []byte, error)
 	ImagePull(ctx context.Context, refStr string, options image.PullOptions) (io.ReadCloser, error)
 	ContainerCreate(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *ocispec.Platform, containerName string) (container.CreateResponse, error)
 	ContainerAttach(ctx context.Context, container string, options container.AttachOptions) (types.HijackedResponse, error)
@@ -50,7 +52,7 @@ func ensureImage(ctx context.Context, cli dockerClientInterface, imageName strin
 		return nil // Image exists
 	}
 
-	if !client.IsErrNotFound(err) {
+	if !errdefs.IsNotFound(err) {
 		return fmt.Errorf("failed to inspect image: %w", err)
 	}
 
@@ -112,7 +114,7 @@ func runServerContainer(ctx context.Context, cli dockerClientInterface, env []st
 	go func() {
 		// StdCopy demultiplexes the container's stdout and stderr streams.
 		_, err := stdcopy.StdCopy(os.Stdout, os.Stderr, hijackedResp.Reader)
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			fmt.Fprintf(os.Stderr, "Error reading from container: %v\n", err)
 		}
 	}()
@@ -120,7 +122,7 @@ func runServerContainer(ctx context.Context, cli dockerClientInterface, env []st
 	// Copy input from terminal to container
 	go func() {
 		_, err := io.Copy(hijackedResp.Conn, os.Stdin)
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			fmt.Fprintf(os.Stderr, "Error writing to container: %v\n", err)
 		}
 		hijackedResp.CloseWrite() // Signal end of input

@@ -32,11 +32,11 @@ type mockDockerClient struct {
 	containerWaitErr    error
 }
 
-func (m *mockDockerClient) ImageInspectWithRaw(ctx context.Context, imageID string) (types.ImageInspect, []byte, error) {
+func (m *mockDockerClient) ImageInspectWithRaw(ctx context.Context, imageID string) (image.InspectResponse, []byte, error) {
 	if m.imageInspectErr != nil {
-		return types.ImageInspect{}, nil, m.imageInspectErr
+		return image.InspectResponse{}, nil, m.imageInspectErr
 	}
-	return types.ImageInspect{ID: imageID}, nil, nil
+	return image.InspectResponse{ID: imageID}, nil, nil
 }
 
 func (m *mockDockerClient) ImagePull(ctx context.Context, refStr string, options image.PullOptions) (io.ReadCloser, error) {
