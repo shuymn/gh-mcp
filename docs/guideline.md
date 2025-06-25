@@ -118,7 +118,7 @@ func ensureImage(ctx context.Context, cli *client.Client, imageName string) erro
   return nil // Image exists  
  }
 
- if !client.IsErrNotFound(err) {  
+ if !errdefs.IsNotFound(err) { // Using containerd errdefs  
   return fmt.Errorf("failed to inspect image: %w", err)  
  }
 
@@ -195,14 +195,14 @@ func runServerContainer(ctx context.Context, cli *client.Client, env []string, i
  go func() {  
   // StdCopy demultiplexes the container's stdout and stderr streams.  
   _, err := stdcopy.StdCopy(os.Stdout, os.Stderr, hijackedResp.Reader)  
-  if err != nil && err != io.EOF {  
+  if err != nil && !errors.Is(err, io.EOF) {  
    fmt.Fprintf(os.Stderr, "Error reading from container: %vn", err)  
   }  
  }()  
     // Copy input from terminal to container  
  go func() {  
   _, err := io.Copy(hijackedResp.Conn, os.Stdin)  
-  if err != nil && err != io.EOF {  
+  if err != nil && !errors.Is(err, io.EOF) {  
    fmt.Fprintf(os.Stderr, "Error writing to container: %vn", err)  
   }  
         hijackedResp.CloseWrite() // Signal end of input  
