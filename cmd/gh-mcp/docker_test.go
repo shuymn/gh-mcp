@@ -42,28 +42,46 @@ type mockDockerClient struct {
 	containerWaitErr    error
 }
 
-func (m *mockDockerClient) ImageInspectWithRaw(ctx context.Context, imageID string) (image.InspectResponse, []byte, error) {
+func (m *mockDockerClient) ImageInspectWithRaw(
+	_ context.Context,
+	imageID string,
+) (image.InspectResponse, []byte, error) {
 	if m.imageInspectErr != nil {
 		return image.InspectResponse{}, nil, m.imageInspectErr
 	}
 	return image.InspectResponse{ID: imageID}, nil, nil
 }
 
-func (m *mockDockerClient) ImagePull(ctx context.Context, refStr string, options image.PullOptions) (io.ReadCloser, error) {
+func (m *mockDockerClient) ImagePull(
+	_ context.Context,
+	_ string,
+	_ image.PullOptions,
+) (io.ReadCloser, error) {
 	if m.imagePullErr != nil {
 		return nil, m.imagePullErr
 	}
 	return io.NopCloser(strings.NewReader(m.imagePullResponse)), nil
 }
 
-func (m *mockDockerClient) ContainerCreate(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *ocispec.Platform, containerName string) (container.CreateResponse, error) {
+func (m *mockDockerClient) ContainerCreate(
+	_ context.Context,
+	_ *container.Config,
+	_ *container.HostConfig,
+	_ *network.NetworkingConfig,
+	_ *ocispec.Platform,
+	_ string,
+) (container.CreateResponse, error) {
 	if m.containerCreateErr != nil {
 		return container.CreateResponse{}, m.containerCreateErr
 	}
 	return container.CreateResponse{ID: m.containerID}, nil
 }
 
-func (m *mockDockerClient) ContainerAttach(ctx context.Context, container string, options container.AttachOptions) (types.HijackedResponse, error) {
+func (m *mockDockerClient) ContainerAttach(
+	_ context.Context,
+	_ string,
+	_ container.AttachOptions,
+) (types.HijackedResponse, error) {
 	if m.containerAttachErr != nil {
 		return types.HijackedResponse{}, m.containerAttachErr
 	}
@@ -74,11 +92,19 @@ func (m *mockDockerClient) ContainerAttach(ctx context.Context, container string
 	}, nil
 }
 
-func (m *mockDockerClient) ContainerStart(ctx context.Context, containerID string, options container.StartOptions) error {
+func (m *mockDockerClient) ContainerStart(
+	_ context.Context,
+	_ string,
+	_ container.StartOptions,
+) error {
 	return m.containerStartErr
 }
 
-func (m *mockDockerClient) ContainerWait(ctx context.Context, containerID string, condition container.WaitCondition) (<-chan container.WaitResponse, <-chan error) {
+func (m *mockDockerClient) ContainerWait(
+	_ context.Context,
+	_ string,
+	_ container.WaitCondition,
+) (<-chan container.WaitResponse, <-chan error) {
 	statusCh := make(chan container.WaitResponse, 1)
 	errCh := make(chan error, 1)
 
@@ -136,7 +162,7 @@ func TestEnsureImage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ensureImage(context.Background(), tt.mock, tt.imageName)
+			err := ensureImage(t.Context(), tt.mock, tt.imageName)
 
 			if tt.wantErr != "" {
 				if err == nil {
@@ -208,13 +234,13 @@ func TestRunServerContainer(t *testing.T) {
 				containerID:         "test-container-123",
 				containerWaitStatus: 1,
 			},
-			wantErr: "container exited with non-zero status: 1",
+			wantErr: fmt.Sprintf("%s: %d", ErrContainerNonZeroExit.Error(), 1),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := runServerContainer(context.Background(), tt.mock, tt.env, "test-image")
+			err := runServerContainer(t.Context(), tt.mock, tt.env, "test-image")
 
 			if tt.wantErr != "" {
 				if err == nil {
@@ -264,6 +290,6 @@ func (m *mockConn) Close() error                       { return nil }
 func (m *mockConn) CloseWrite() error                  { return nil }
 func (m *mockConn) LocalAddr() net.Addr                { return &net.TCPAddr{} }
 func (m *mockConn) RemoteAddr() net.Addr               { return &net.TCPAddr{} }
-func (m *mockConn) SetDeadline(t time.Time) error      { return nil }
-func (m *mockConn) SetReadDeadline(t time.Time) error  { return nil }
-func (m *mockConn) SetWriteDeadline(t time.Time) error { return nil }
+func (m *mockConn) SetDeadline(_ time.Time) error      { return nil }
+func (m *mockConn) SetReadDeadline(_ time.Time) error  { return nil }
+func (m *mockConn) SetWriteDeadline(_ time.Time) error { return nil }

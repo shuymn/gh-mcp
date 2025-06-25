@@ -8,11 +8,15 @@ import (
 
 // Define static errors for testing
 var (
-	errNotLoggedIn = errors.New("not logged in to GitHub. Please run `gh auth login`")
-	errDockerConnection = errors.New("failed to create docker client: connection refused. Is the Docker daemon running?")
-	errImageUnauthorized = errors.New("failed to pull docker image 'ghcr.io/github/github-mcp-server:latest': unauthorized")
+	errNotLoggedIn      = errors.New("not logged in to GitHub. Please run `gh auth login`")
+	errDockerConnection = errors.New(
+		"failed to create docker client: connection refused. Is the Docker daemon running?",
+	)
+	errImageUnauthorized = errors.New(
+		"failed to pull docker image 'ghcr.io/github/github-mcp-server:latest': unauthorized",
+	)
 	errContainerNonZero = errors.New("container exited with non-zero status: 1")
-	errCaptureEnv = errors.New("capture env")
+	errCaptureEnv       = errors.New("capture env")
 )
 
 // mockRunner implements runner for testing
@@ -33,11 +37,16 @@ func (m *mockRunner) newDockerClient() (dockerClientInterface, error) {
 	return m.dockerClient, m.dockerClientErr
 }
 
-func (m *mockRunner) ensureImage(ctx context.Context, cli dockerClientInterface, imageName string) error {
+func (m *mockRunner) ensureImage(_ context.Context, _ dockerClientInterface, _ string) error {
 	return m.ensureImageErr
 }
 
-func (m *mockRunner) runContainer(ctx context.Context, cli dockerClientInterface, env []string, imageName string) error {
+func (m *mockRunner) runContainer(
+	_ context.Context,
+	_ dockerClientInterface,
+	_ []string,
+	_ string,
+) error {
 	return m.runContainerErr
 }
 
@@ -62,7 +71,7 @@ func TestRunWithRunner(t *testing.T) {
 			mock: &mockRunner{
 				authErr: errNotLoggedIn,
 			},
-			wantErr: "not logged in to GitHub. Please run `gh auth login`",
+			wantErr: ErrNotLoggedIn.Error(),
 		},
 		{
 			name: "docker client error",
@@ -113,7 +122,7 @@ func TestRunWithRunner(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := runWithRunner(context.Background(), tt.mock)
+			err := runWithRunner(t.Context(), tt.mock)
 
 			if tt.wantErr != "" {
 				if err == nil {
@@ -153,7 +162,7 @@ func TestEnvironmentVariables(t *testing.T) {
 		runContainerErr: errCaptureEnv,
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	_ = runWithRunner(ctx, mock)
 
 	// The test passes if the error is as expected
