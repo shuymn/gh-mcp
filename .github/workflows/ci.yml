@@ -17,16 +17,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Check if tagpr branch
+      id: check-branch
+      run: |
+        if [[ "${{ github.head_ref || github.ref_name }}" == tagpr-from-v* ]]; then
+          echo "skip=true" >> $GITHUB_OUTPUT
+        else
+          echo "skip=false" >> $GITHUB_OUTPUT
+        fi
+
     - name: Checkout code
+      if: steps.check-branch.outputs.skip != 'true'
       uses: actions/checkout@v4
 
     - name: Set up Go
+      if: steps.check-branch.outputs.skip != 'true'
       uses: actions/setup-go@v5
       with:
         go-version: stable
         cache: true
 
     - name: Run golangci-lint
+      if: steps.check-branch.outputs.skip != 'true'
       uses: golangci/golangci-lint-action@v8
       with:
         version: latest
@@ -38,28 +50,44 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Check if tagpr branch
+      id: check-branch
+      run: |
+        if [[ "${{ github.head_ref || github.ref_name }}" == tagpr-from-v* ]]; then
+          echo "skip=true" >> $GITHUB_OUTPUT
+        else
+          echo "skip=false" >> $GITHUB_OUTPUT
+        fi
+
     - name: Checkout code
+      if: steps.check-branch.outputs.skip != 'true'
       uses: actions/checkout@v4
 
     - name: Set up Go
+      if: steps.check-branch.outputs.skip != 'true'
       uses: actions/setup-go@v5
       with:
         go-version: stable
         cache: true
 
     - name: Download dependencies
+      if: steps.check-branch.outputs.skip != 'true'
       run: go mod download
 
     - name: Verify dependencies
+      if: steps.check-branch.outputs.skip != 'true'
       run: make deps-verify
 
     - name: Run tests
+      if: steps.check-branch.outputs.skip != 'true'
       run: make test
 
     - name: Run tests with coverage
+      if: steps.check-branch.outputs.skip != 'true'
       run: go test -race -coverprofile=coverage.out ./...
 
     - uses: k1LoW/octocov-action@v1
+      if: steps.check-branch.outputs.skip != 'true'
 
   build:
     name: Build
@@ -67,25 +95,39 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Check if tagpr branch
+      id: check-branch
+      run: |
+        if [[ "${{ github.head_ref || github.ref_name }}" == tagpr-from-v* ]]; then
+          echo "skip=true" >> $GITHUB_OUTPUT
+        else
+          echo "skip=false" >> $GITHUB_OUTPUT
+        fi
+
     - name: Checkout code
+      if: steps.check-branch.outputs.skip != 'true'
       uses: actions/checkout@v4
 
     - name: Set up Go
+      if: steps.check-branch.outputs.skip != 'true'
       uses: actions/setup-go@v5
       with:
         go-version: stable
         cache: true
 
     - name: Build binary
+      if: steps.check-branch.outputs.skip != 'true'
       run: make build
 
     - name: Test binary exists and is executable
+      if: steps.check-branch.outputs.skip != 'true'
       run: |
         test -f gh-mcp
         test -x gh-mcp
         ./gh-mcp --version || true
 
     - name: Upload artifact
+      if: steps.check-branch.outputs.skip != 'true'
       uses: actions/upload-artifact@v4
       with:
         name: gh-mcp-linux-amd64
