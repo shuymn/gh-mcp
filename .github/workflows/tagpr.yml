@@ -16,8 +16,6 @@ jobs:
       with:
         token: ${{ steps.app-token.outputs.token }}
         ref: ${{ github.head_ref }}
-        # Make sure the value of GITHUB_TOKEN will not be persisted in repo's config
-        persist-credentials: false
     - uses: Songmu/tagpr@v1
       env:
         GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
