@@ -1,0 +1,57 @@
+package main
+
+import (
+	"fmt"
+
+	"github.com/cli/go-gh/v2/pkg/auth"
+)
+
+// authDetails holds the user's active GitHub host and token.
+type authDetails struct {
+	Host  string
+	Token string
+}
+
+// authInterface defines the methods we need from the auth package for testing
+type authInterface interface {
+	DefaultHost() (string, error)
+	TokenForHost(host string) (string, error)
+}
+
+// realAuth implements authInterface using the actual go-gh auth package
+type realAuth struct{}
+
+func (r *realAuth) DefaultHost() (string, error) {
+	host, _ := auth.DefaultHost()
+	return host, nil
+}
+
+func (r *realAuth) TokenForHost(host string) (string, error) {
+	token, _ := auth.TokenForHost(host)
+	return token, nil
+}
+
+// getAuthDetails retrieves the current user's GitHub host and OAuth token
+// from the gh CLI's authentication context.
+func getAuthDetails() (*authDetails, error) {
+	return getAuthDetailsWithAuth(&realAuth{})
+}
+
+// getAuthDetailsWithAuth is the testable version that accepts an auth interface
+func getAuthDetailsWithAuth(a authInterface) (*authDetails, error) {
+	host, err := a.DefaultHost()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default host: %w", err)
+	}
+
+	token, err := a.TokenForHost(host)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get token for host %s: %w", host, err)
+	}
+
+	if token == "" {
+		return nil, fmt.Errorf("not logged in to GitHub. Please run `gh auth login`")
+	}
+
+	return &authDetails{Host: host, Token: token}, nil
+}
