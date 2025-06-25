@@ -145,14 +145,6 @@ func TestRunWithRunner(t *testing.T) {
 	}
 }
 
-func TestMainConstants(t *testing.T) {
-	// Test that the MCP image constant is set correctly
-	expected := "ghcr.io/github/github-mcp-server:latest"
-	if mcpImage != expected {
-		t.Errorf("mcpImage = %q, want %q", mcpImage, expected)
-	}
-}
-
 func TestEnvironmentVariables(t *testing.T) {
 	// Test that environment variables are properly formatted
 	mock := &mockRunner{
