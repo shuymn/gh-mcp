@@ -110,6 +110,19 @@ func runWithRunner(ctx context.Context, r runner) error {
 		"GITHUB_HOST=" + auth.Host,
 	}
 
+	// Pass through optional environment variables if they are set
+	optionalEnvVars := []string{
+		"GITHUB_TOOLSETS",
+		"GITHUB_DYNAMIC_TOOLSETS",
+		"GITHUB_READ_ONLY",
+	}
+
+	for _, envVar := range optionalEnvVars {
+		if value := os.Getenv(envVar); value != "" {
+			env = append(env, envVar+"="+value)
+		}
+	}
+
 	// 5. Run the container and stream I/O
 	fmt.Println("✅ Ready! Starting MCP server...")
 	if err := r.runContainer(ctx, cli, env, mcpImage); err != nil {

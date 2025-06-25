@@ -27,6 +27,7 @@ type mockRunner struct {
 	dockerClientErr error
 	ensureImageErr  error
 	runContainerErr error
+	capturedEnv     []string  // To capture env vars passed to runContainer
 }
 
 func (m *mockRunner) getAuth() (*authDetails, error) {
@@ -44,9 +45,10 @@ func (m *mockRunner) ensureImage(_ context.Context, _ dockerClientInterface, _ s
 func (m *mockRunner) runContainer(
 	_ context.Context,
 	_ dockerClientInterface,
-	_ []string,
+	env []string,
 	_ string,
 ) error {
+	m.capturedEnv = env
 	return m.runContainerErr
 }
 
@@ -167,4 +169,93 @@ func TestEnvironmentVariables(t *testing.T) {
 
 	// The test passes if the error is as expected
 	// In a real test, we'd capture the env variables passed to runContainer
+}
+
+func TestOptionalEnvironmentVariables(t *testing.T) {
+	// Set test values using t.Setenv (automatically cleaned up)
+	t.Setenv("GITHUB_TOOLSETS", "repos,issues")
+	t.Setenv("GITHUB_DYNAMIC_TOOLSETS", "1")
+	t.Setenv("GITHUB_READ_ONLY", "1")
+	
+	// Create a mock that captures the env parameter
+	mock := &mockRunner{
+		authDetails: &authDetails{
+			Host:  "https://github.com",
+			Token: "test-token",
+		},
+		dockerClient: &mockDockerClient{},
+	}
+	
+	ctx := t.Context()
+	err := runWithRunner(ctx, mock)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	
+	// Check that all expected env vars are present
+	expectedEnvs := map[string]string{
+		"GITHUB_PERSONAL_ACCESS_TOKEN": "test-token",
+		"GITHUB_HOST":                  "https://github.com",
+		"GITHUB_TOOLSETS":              "repos,issues",
+		"GITHUB_DYNAMIC_TOOLSETS":      "1",
+		"GITHUB_READ_ONLY":             "1",
+	}
+	
+	for key, expectedValue := range expectedEnvs {
+		found := false
+		for _, env := range mock.capturedEnv {
+			if env == key+"="+expectedValue {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected env var %s=%s not found in %v", key, expectedValue, mock.capturedEnv)
+		}
+	}
+}
+
+func TestOptionalEnvironmentVariablesNotSet(t *testing.T) {
+	// Ensure env vars are not set
+	t.Setenv("GITHUB_TOOLSETS", "")
+	t.Setenv("GITHUB_DYNAMIC_TOOLSETS", "")
+	t.Setenv("GITHUB_READ_ONLY", "")
+	
+	mock := &mockRunner{
+		authDetails: &authDetails{
+			Host:  "https://github.com",
+			Token: "test-token",
+		},
+		dockerClient: &mockDockerClient{},
+	}
+	
+	ctx := t.Context()
+	err := runWithRunner(ctx, mock)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	
+	// Check that only required env vars are present
+	requiredEnvs := map[string]string{
+		"GITHUB_PERSONAL_ACCESS_TOKEN": "test-token",
+		"GITHUB_HOST":                  "https://github.com",
+	}
+	
+	// Should only have the required env vars
+	if len(mock.capturedEnv) != len(requiredEnvs) {
+		t.Errorf("Expected %d env vars, got %d: %v", len(requiredEnvs), len(mock.capturedEnv), mock.capturedEnv)
+	}
+	
+	for key, expectedValue := range requiredEnvs {
+		found := false
+		for _, env := range mock.capturedEnv {
+			if env == key+"="+expectedValue {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected env var %s=%s not found in %v", key, expectedValue, mock.capturedEnv)
+		}
+	}
 }
