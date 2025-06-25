@@ -40,14 +40,23 @@ type runner interface {
 }
 
 // realRunner implements runner using actual implementations
-type realRunner struct{}
+type realRunner struct {
+	authInterface authInterface
+}
 
 func (r *realRunner) getAuth() (*authDetails, error) {
-	return getAuthDetails()
+	return getAuthDetails(r.getAuthInterface())
 }
 
 func (r *realRunner) newDockerClient() (dockerClientInterface, error) {
 	return newDockerClient()
+}
+
+func (r *realRunner) getAuthInterface() authInterface {
+	if r.authInterface == nil {
+		r.authInterface = &realAuth{}
+	}
+	return r.authInterface
 }
 
 func (r *realRunner) ensureImage(

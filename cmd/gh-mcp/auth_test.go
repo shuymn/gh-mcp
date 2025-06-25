@@ -67,7 +67,7 @@ func TestGetAuthDetailsWithAuth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getAuthDetailsWithAuth(tt.mock)
+			got, err := getAuthDetails(tt.mock)
 
 			if tt.wantErr != "" {
 				if err == nil {

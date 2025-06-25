@@ -45,12 +45,7 @@ func (r *realAuth) TokenForHost(host string) string {
 
 // getAuthDetails retrieves the current user's GitHub host and OAuth token
 // from the gh CLI's authentication context.
-func getAuthDetails() (*authDetails, error) {
-	return getAuthDetailsWithAuth(&realAuth{})
-}
-
-// getAuthDetailsWithAuth is the testable version that accepts an auth interface
-func getAuthDetailsWithAuth(a authInterface) (*authDetails, error) {
+func getAuthDetails(a authInterface) (*authDetails, error) {
 	host := a.DefaultHost()
 	if host == "" {
 		return nil, ErrNoHost
