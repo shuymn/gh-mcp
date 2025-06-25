@@ -1,0 +1,20 @@
+coverage:
+  acceptable: 60%
+  paths:
+    - coverage.out
+codeToTestRatio:
+  code:
+    - "**/*.go"
+    - "!**/*_test.go"
+  test:
+    - "**/*_test.go"
+testExecutionTime:
+  acceptable: 60s
+comment:
+  enable: true
+  hideFooterLink: false
+report:
+  if: is_pull_request
+diff:
+  datastores:
+    - artifact://${GITHUB_REPOSITORY}

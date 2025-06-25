@@ -19,9 +19,8 @@ test: ## Run tests with race detection and shuffle (10 times)
 # Run tests with coverage
 .PHONY: test-coverage
 test-coverage: ## Run tests with coverage report
-	go test -race -coverprofile=$(COVERAGE_FILE) -covermode=atomic ./...
-	go tool cover -html=$(COVERAGE_FILE) -o coverage.html
-	@echo "Coverage report generated: coverage.html"
+	go test -race -coverprofile=$(COVERAGE_FILE) ./...
+	octocov ls-files
 
 # Run tests verbosely
 .PHONY: test-verbose

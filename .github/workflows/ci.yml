@@ -8,12 +8,14 @@ on:
 
 permissions:
   contents: read
+  actions: read  # Required for octocov to read artifacts
+  pull-requests: write  # Required for octocov to comment on PRs
 
 jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -34,7 +36,7 @@ jobs:
     name: Test
     needs: lint
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -55,15 +57,15 @@ jobs:
       run: make test
 
     - name: Run tests with coverage
-      run: |
-        go test -race -coverprofile=coverage.txt -covermode=atomic ./...
-        go tool cover -func=coverage.txt
+      run: go test -race -coverprofile=coverage.out ./...
+
+    - uses: k1LoW/octocov-action@v1
 
   build:
     name: Build
     needs: test
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
