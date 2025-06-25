@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"net/url"
 
 	"github.com/cli/go-gh/v2/pkg/auth"
 )
@@ -54,6 +55,13 @@ func getAuthDetails(a authInterface) (*authDetails, error) {
 	token := a.TokenForHost(host)
 	if token == "" {
 		return nil, ErrNotLoggedIn
+	}
+
+	// Ensure host has https:// prefix for github-mcp-server compatibility
+	parsedURL, err := url.Parse(host)
+	if err != nil || parsedURL.Scheme == "" {
+		// If parsing fails or no scheme, assume it's just a hostname
+		host = "https://" + host
 	}
 
 	return &authDetails{Host: host, Token: token}, nil
