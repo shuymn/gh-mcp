@@ -1,0 +1,32 @@
+version: "2"
+linters:
+  default: all
+  disable:
+    - depguard
+    - cyclop
+    - exhaustruct
+    - forbidigo
+    - funlen
+    - godot
+    - ireturn
+    - lll
+    - nlreturn
+    - paralleltest
+    - varnamelen
+    - wsl
+  exclusions:
+    warn-unused: true
+    presets:
+      - comments
+      - std-error-handling
+      - common-false-positives
+      - legacy
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
+  exclusions:
+    warn-unused: true
