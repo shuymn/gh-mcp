@@ -19,6 +19,8 @@ gh extension install shuymn/gh-mcp
 
 ## Usage
 
+### Running Directly
+
 Simply run:
 
 ```bash
@@ -33,6 +35,16 @@ The extension will:
 5. Stream I/O between your terminal and the container
 
 Press `Ctrl+C` to gracefully shut down the server.
+
+### Using with Claude Code
+
+To add this as an MCP server to Claude Code:
+
+```bash
+claude mcp add-json -s user github '{"command":"gh","args":["mcp"]}'
+```
+
+This will configure Claude Code to use `gh-mcp` as the GitHub MCP server.
 
 ## Configuration
 
