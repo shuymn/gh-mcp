@@ -134,13 +134,7 @@ func runServerContainer(
 	}
 	defer hijackedResp.Close()
 
-	// 3. Start the container
-	if err := cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		return fmt.Errorf("failed to start container: %w", err)
-	}
-	slog.Info("🚀 Starting github-mcp-server in Docker. Press Ctrl+C to exit.")
-
-	// 4. Set up concurrent I/O streaming
+	// 3. Set up concurrent I/O streaming before starting container
 	// Channel to signal when stdin is closed
 	stdinClosed := make(chan struct{})
 
@@ -182,6 +176,12 @@ func runServerContainer(
 			}
 		}
 	}()
+
+	// 4. Start the container after I/O is set up
+	if err := cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		return fmt.Errorf("failed to start container: %w", err)
+	}
+	slog.Info("🚀 Starting github-mcp-server in Docker. Press Ctrl+C to exit.")
 
 	// 5. Wait for the container to exit
 	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
