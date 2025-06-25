@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
 	"os/signal"
 	"syscall"
 )
@@ -11,13 +11,19 @@ import (
 const mcpImage = "ghcr.io/github/github-mcp-server:latest"
 
 func main() {
+	os.Exit(mainRun())
+}
+
+func mainRun() int {
 	// Set up a context that listens for termination signals
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	if err := run(ctx); err != nil {
-		log.Fatalf("Error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
 	}
+	return 0
 }
 
 // runner interface for dependency injection
@@ -25,7 +31,12 @@ type runner interface {
 	getAuth() (*authDetails, error)
 	newDockerClient() (dockerClientInterface, error)
 	ensureImage(ctx context.Context, cli dockerClientInterface, imageName string) error
-	runContainer(ctx context.Context, cli dockerClientInterface, env []string, imageName string) error
+	runContainer(
+		ctx context.Context,
+		cli dockerClientInterface,
+		env []string,
+		imageName string,
+	) error
 }
 
 // realRunner implements runner using actual implementations
@@ -39,11 +50,20 @@ func (r *realRunner) newDockerClient() (dockerClientInterface, error) {
 	return newDockerClient()
 }
 
-func (r *realRunner) ensureImage(ctx context.Context, cli dockerClientInterface, imageName string) error {
+func (r *realRunner) ensureImage(
+	ctx context.Context,
+	cli dockerClientInterface,
+	imageName string,
+) error {
 	return ensureImage(ctx, cli, imageName)
 }
 
-func (r *realRunner) runContainer(ctx context.Context, cli dockerClientInterface, env []string, imageName string) error {
+func (r *realRunner) runContainer(
+	ctx context.Context,
+	cli dockerClientInterface,
+	env []string,
+	imageName string,
+) error {
 	return runServerContainer(ctx, cli, env, imageName)
 }
 
@@ -77,8 +97,8 @@ func runWithRunner(ctx context.Context, r runner) error {
 
 	// 4. Prepare environment
 	env := []string{
-		fmt.Sprintf("GITHUB_PERSONAL_ACCESS_TOKEN=%s", auth.Token),
-		fmt.Sprintf("GITHUB_HOST=%s", auth.Host),
+		"GITHUB_PERSONAL_ACCESS_TOKEN=" + auth.Token,
+		"GITHUB_HOST=" + auth.Host,
 	}
 
 	// 5. Run the container and stream I/O
