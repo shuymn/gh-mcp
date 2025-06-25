@@ -14,6 +14,8 @@ linters:
     - paralleltest
     - varnamelen
     - wsl
+    - gocognit
+    - contextcheck
   exclusions:
     warn-unused: true
     presets:
