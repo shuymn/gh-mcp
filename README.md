@@ -17,6 +17,14 @@ A GitHub CLI extension that seamlessly runs the [github-mcp-server](https://gith
 gh extension install shuymn/gh-mcp
 ```
 
+### Updating
+
+To update the extension to the latest version:
+
+```bash
+gh extension upgrade mcp
+```
+
 ## Usage
 
 ### MCP Configuration
