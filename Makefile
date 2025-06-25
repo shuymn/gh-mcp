@@ -30,7 +30,7 @@ test-verbose: ## Run tests with verbose output
 
 # Run linter
 .PHONY: lint
-lint: ## Run golangci-lint
+lint: fmt ## Run golangci-lint
 	golangci-lint run
 
 # Format code
