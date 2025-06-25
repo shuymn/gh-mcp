@@ -140,6 +140,9 @@ func runServerContainer(
 	fmt.Println("🚀 Starting github-mcp-server in Docker. Press Ctrl+C to exit.")
 
 	// 4. Set up concurrent I/O streaming
+	// Channel to signal when stdin is closed
+	stdinClosed := make(chan struct{})
+
 	// Copy output from container to terminal
 	go func() {
 		// StdCopy demultiplexes the container's stdout and stderr streams.
@@ -158,7 +161,10 @@ func runServerContainer(
 	// Copy input from terminal to container
 	go func() {
 		_, err := io.Copy(hijackedResp.Conn, os.Stdin)
-		if err != nil && !errors.Is(err, io.EOF) {
+		// When stdin is closed (EOF), signal that we should stop
+		if err == nil || errors.Is(err, io.EOF) {
+			close(stdinClosed)
+		} else {
 			select {
 			case <-ctx.Done():
 				// Context was canceled, we're shutting down - ignore error
@@ -196,6 +202,14 @@ func runServerContainer(
 		if status.StatusCode != 0 {
 			return fmt.Errorf("%w: %d", ErrContainerNonZeroExit, status.StatusCode)
 		}
+	case <-stdinClosed:
+		// Stdin was closed (EOF) - stop the container gracefully
+		// This happens when Claude Code terminates
+		stopCtx := context.Background()
+		if err := cli.ContainerStop(stopCtx, resp.ID, container.StopOptions{}); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to stop container: %v\n", err)
+		}
+		return nil
 	case <-ctx.Done():
 		// Context was canceled (Ctrl+C pressed)
 		stopCtx := context.Background()
