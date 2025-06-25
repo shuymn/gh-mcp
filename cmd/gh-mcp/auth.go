@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/cli/go-gh/v2/pkg/auth"
 )
@@ -11,6 +10,8 @@ import (
 var (
 	// ErrNotLoggedIn is returned when the user is not authenticated with GitHub
 	ErrNotLoggedIn = errors.New("not logged in to GitHub. Please run `gh auth login`")
+	// ErrNoHost is returned when no default host is configured
+	ErrNoHost = errors.New("failed to get default host")
 )
 
 // authDetails holds the user's active GitHub host and token.
@@ -21,25 +22,25 @@ type authDetails struct {
 
 // authInterface defines the methods we need from the auth package for testing
 type authInterface interface {
-	DefaultHost() (string, error)
-	TokenForHost(host string) (string, error)
+	DefaultHost() string
+	TokenForHost(host string) string
 }
 
 // realAuth implements authInterface using the actual go-gh auth package
 type realAuth struct{}
 
-func (r *realAuth) DefaultHost() (string, error) {
+func (r *realAuth) DefaultHost() string {
 	// auth.DefaultHost returns (host, source) where source indicates where the host value came from
 	// We only need the host value, so we ignore the source
 	host, _ := auth.DefaultHost()
-	return host, nil
+	return host
 }
 
-func (r *realAuth) TokenForHost(host string) (string, error) {
+func (r *realAuth) TokenForHost(host string) string {
 	// auth.TokenForHost returns (token, source) where source indicates where the token came from
 	// We only need the token value, so we ignore the source
 	token, _ := auth.TokenForHost(host)
-	return token, nil
+	return token
 }
 
 // getAuthDetails retrieves the current user's GitHub host and OAuth token
@@ -50,16 +51,12 @@ func getAuthDetails() (*authDetails, error) {
 
 // getAuthDetailsWithAuth is the testable version that accepts an auth interface
 func getAuthDetailsWithAuth(a authInterface) (*authDetails, error) {
-	host, err := a.DefaultHost()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get default host: %w", err)
+	host := a.DefaultHost()
+	if host == "" {
+		return nil, ErrNoHost
 	}
 
-	token, err := a.TokenForHost(host)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get token for host %s: %w", host, err)
-	}
-
+	token := a.TokenForHost(host)
 	if token == "" {
 		return nil, ErrNotLoggedIn
 	}

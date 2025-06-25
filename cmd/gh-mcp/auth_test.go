@@ -1,30 +1,21 @@
 package main
 
 import (
-	"errors"
 	"testing"
-)
-
-// Define static errors for testing
-var (
-	errHostTest  = errors.New("host error")
-	errTokenTest = errors.New("token error")
 )
 
 // mockAuth implements authInterface for testing
 type mockAuth struct {
-	defaultHost     string
-	defaultHostErr  error
-	tokenForHost    string
-	tokenForHostErr error
+	defaultHost  string
+	tokenForHost string
 }
 
-func (m *mockAuth) DefaultHost() (string, error) {
-	return m.defaultHost, m.defaultHostErr
+func (m *mockAuth) DefaultHost() string {
+	return m.defaultHost
 }
 
-func (m *mockAuth) TokenForHost(_ string) (string, error) {
-	return m.tokenForHost, m.tokenForHostErr
+func (m *mockAuth) TokenForHost(_ string) string {
+	return m.tokenForHost
 }
 
 func TestGetAuthDetailsWithAuth(t *testing.T) {
@@ -54,19 +45,12 @@ func TestGetAuthDetailsWithAuth(t *testing.T) {
 			wantErr: ErrNotLoggedIn.Error(),
 		},
 		{
-			name: "default host error",
+			name: "empty host",
 			mock: &mockAuth{
-				defaultHostErr: errHostTest,
+				defaultHost:  "",
+				tokenForHost: "some-token",
 			},
-			wantErr: "failed to get default host: host error",
-		},
-		{
-			name: "token for host error",
-			mock: &mockAuth{
-				defaultHost:     "github.com",
-				tokenForHostErr: errTokenTest,
-			},
-			wantErr: "failed to get token for host github.com: token error",
+			wantErr: ErrNoHost.Error(),
 		},
 		{
 			name: "enterprise host",
