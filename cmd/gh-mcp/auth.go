@@ -22,11 +22,15 @@ type authInterface interface {
 type realAuth struct{}
 
 func (r *realAuth) DefaultHost() (string, error) {
+	// auth.DefaultHost returns (host, source) where source indicates where the host value came from
+	// We only need the host value, so we ignore the source
 	host, _ := auth.DefaultHost()
 	return host, nil
 }
 
 func (r *realAuth) TokenForHost(host string) (string, error) {
+	// auth.TokenForHost returns (token, source) where source indicates where the token came from
+	// We only need the token value, so we ignore the source
 	token, _ := auth.TokenForHost(host)
 	return token, nil
 }
