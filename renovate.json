@@ -11,5 +11,19 @@
     "postUpdateOptions": [
         "gomodTidy",
         "gomodUpdateImportPaths"
+    ],
+    "customManagers": [
+        {
+            "customType": "regex",
+            "managerFilePatterns": [
+                "main.go"
+            ],
+            "matchStrings": [
+                "const mcpImage = \"(?<depName>[^@\"]+)@sha256:(?<digest>[0-9a-f]{64})\"(?:\\s*//\\s*v(?<currentValue>\\S+))?"
+            ],
+            "datasourceTemplate": "docker",
+            "depNameTemplate": "{{{depName}}}",
+            "autoReplaceStringTemplate": "const mcpImage = \"{{{depName}}}@sha256:{{{newDigest}}}\" // v{{{newValue}}}"
+        }
     ]
 }
