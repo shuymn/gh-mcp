@@ -9,7 +9,8 @@
         "dependencies"
     ],
     "postUpdateOptions": [
-        "gomodTidy"
+        "gomodTidy",
+        "gomodUpdateImportPaths"
     ],
     "customManagers": [
         {
