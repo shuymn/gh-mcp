@@ -2,3 +2,5 @@
 /gh-mcp.exe
 /coverage.out
 /.DS_Store
+/.gemini/
+/.claude/
