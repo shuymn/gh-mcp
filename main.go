@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 )
 
@@ -14,6 +15,20 @@ func main() {
 	os.Exit(mainRun())
 }
 
+func parseLogLevel() slog.Level {
+	levelStr := os.Getenv("LOG_LEVEL")
+	if levelStr == "" {
+		return slog.LevelInfo
+	}
+
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(strings.ToUpper(levelStr))); err != nil {
+		return slog.LevelInfo
+	}
+
+	return level
+}
+
 func mainRun() int {
 	// Set up a context that listens for termination signals
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -21,7 +36,7 @@ func mainRun() int {
 
 	// Initialize slog with text handler for CLI output
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: parseLogLevel(),
 	}))
 	slog.SetDefault(logger)
 
