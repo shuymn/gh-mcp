@@ -1,5 +1,8 @@
 # Changelog
 
+## [v1.0.4](https://github.com/shuymn/gh-mcp/compare/v1.0.3...v1.0.4) - 2025-06-28
+- Add LOG_LEVEL environment variable support by @devin-ai-integration in https://github.com/shuymn/gh-mcp/pull/11
+
 ## [v1.0.3](https://github.com/shuymn/gh-mcp/compare/v1.0.2...v1.0.3) - 2025-06-26
 - fix(deps): update module github.com/containerd/containerd to v2 by @renovate in https://github.com/shuymn/gh-mcp/pull/7
 - chore(deps): pin dependencies by @renovate in https://github.com/shuymn/gh-mcp/pull/10
