@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 )
 
@@ -255,5 +256,34 @@ func TestOptionalEnvironmentVariablesNotSet(t *testing.T) {
 		if !found {
 			t.Errorf("Expected env var %s=%s not found in %v", key, expectedValue, mock.capturedEnv)
 		}
+	}
+}
+
+func TestParseLogLevel(t *testing.T) {
+	tests := []struct {
+		name     string
+		envValue string
+		expected slog.Level
+	}{
+		{"default when unset", "", slog.LevelInfo},
+		{"debug level", "DEBUG", slog.LevelDebug},
+		{"info level", "INFO", slog.LevelInfo},
+		{"warn level", "WARN", slog.LevelWarn},
+		{"error level", "ERROR", slog.LevelError},
+		{"case insensitive", "debug", slog.LevelDebug},
+		{"invalid value fallback", "INVALID", slog.LevelInfo},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envValue != "" {
+				t.Setenv("LOG_LEVEL", tt.envValue)
+			}
+
+			result := parseLogLevel()
+			if result != tt.expected {
+				t.Errorf("parseLogLevel() = %v, want %v", result, tt.expected)
+			}
+		})
 	}
 }
