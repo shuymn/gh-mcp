@@ -258,6 +258,7 @@ func TestOptionalEnvironmentVariablesNotSet(t *testing.T) {
 		}
 	}
 }
+
 func TestParseLogLevel(t *testing.T) {
 	tests := []struct {
 		name     string
