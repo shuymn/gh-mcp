@@ -39,11 +39,11 @@
         "main.go"
       ],
       "matchStrings": [
-        "const mcpImage = \"(?<depName>[^@\"]+)@(?<currentDigest>sha256:[0-9a-f]{64})\"(?:\\s*//\\s*v(?<currentValue>\\S+))?"
+        "const mcpImage = \"(?<depName>[^@\"]+)@(?<currentDigest>sha256:[0-9a-f]{64})\"(?:\\s*//\\s*(?<currentValue>\\S+))?"
       ],
       "datasourceTemplate": "docker",
       "depNameTemplate": "{{{depName}}}",
-      "autoReplaceStringTemplate": "const mcpImage = \"{{{depName}}}@{{{newDigest}}}\" // v{{{newValue}}}"
+      "autoReplaceStringTemplate": "const mcpImage = \"{{{depName}}}@{{{newDigest}}}\" // {{{newValue}}}"
     }
   ]
 }
