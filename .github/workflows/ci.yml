@@ -37,11 +37,16 @@ jobs:
         go-version: stable
         cache: true
 
+    - name: Set golangci-lint version
+      id: set-golangci-lint-version
+      if: steps.check-branch.outputs.skip != 'true'
+      run: echo "version=v$(go tool -modfile=go.tool.mod golangci-lint version --short)" >> $GITHUB_OUTPUT
+
     - name: Run golangci-lint
       if: steps.check-branch.outputs.skip != 'true'
       uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
       with:
-        version: latest
+        version: ${{ steps.set-golangci-lint-version.outputs.version }}
         args: --timeout=5m
 
   test:
