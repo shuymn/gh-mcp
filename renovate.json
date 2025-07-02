@@ -8,6 +8,12 @@
   "labels": [
     "dependencies"
   ],
+  "gomod": {
+    "managerFilePatterns": [
+      "go.mod",
+      "go.tool.mod"
+    ]
+  },
   "packageRules": [
     {
       "matchFileNames": [
