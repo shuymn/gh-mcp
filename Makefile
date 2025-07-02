@@ -29,12 +29,12 @@ test-verbose: ## Run tests with verbose output
 # Run linter
 .PHONY: lint
 lint: fmt ## Run golangci-lint
-	golangci-lint run
+	go tool -modfile=go.tool.mod golangci-lint run
 
 # Format code
 .PHONY: fmt
 fmt: ## Format code using golangci-lint
-	golangci-lint fmt
+	go tool -modfile=go.tool.mod golangci-lint fmt
 
 # Install the extension locally
 .PHONY: install

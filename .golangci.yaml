@@ -16,6 +16,8 @@ linters:
     - wsl
     - gocognit
     - contextcheck
+    - wsl_v5
+    - noinlineerr
   exclusions:
     warn-unused: true
     presets:

@@ -1,29 +1,49 @@
 {
-    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-    "extends": [
-        "config:recommended",
-        "config:best-practices",
-        ":timezone(Asia/Tokyo)"
-    ],
-    "labels": [
-        "dependencies"
-    ],
-    "postUpdateOptions": [
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "config:best-practices",
+    ":timezone(Asia/Tokyo)"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "packageRules": [
+    {
+      "matchFileNames": [
+        "go.mod"
+      ],
+      "matchManagers": [
+        "gomod"
+      ],
+      "additionalBranchPrefix": "gomod-",
+      "postUpdateOptions": [
         "gomodTidy",
         "gomodUpdateImportPaths"
-    ],
-    "customManagers": [
-        {
-            "customType": "regex",
-            "managerFilePatterns": [
-                "main.go"
-            ],
-            "matchStrings": [
-                "const mcpImage = \"(?<depName>[^@\"]+)@(?<currentDigest>sha256:[0-9a-f]{64})\"(?:\\s*//\\s*v(?<currentValue>\\S+))?"
-            ],
-            "datasourceTemplate": "docker",
-            "depNameTemplate": "{{{depName}}}",
-            "autoReplaceStringTemplate": "const mcpImage = \"{{{depName}}}@{{{newDigest}}}\" // v{{{newValue}}}"
-        }
-    ]
+      ]
+    },
+    {
+      "matchFileNames": [
+        "go.tool.mod"
+      ],
+      "matchManagers": [
+        "gomod"
+      ],
+      "additionalBranchPrefix": "gotool-"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "main.go"
+      ],
+      "matchStrings": [
+        "const mcpImage = \"(?<depName>[^@\"]+)@(?<currentDigest>sha256:[0-9a-f]{64})\"(?:\\s*//\\s*v(?<currentValue>\\S+))?"
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "{{{depName}}}",
+      "autoReplaceStringTemplate": "const mcpImage = \"{{{depName}}}@{{{newDigest}}}\" // v{{{newValue}}}"
+    }
+  ]
 }
