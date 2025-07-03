@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.0.6](https://github.com/shuymn/gh-mcp/compare/v1.0.5...v1.0.6) - 2025-07-03
+- fix: configure Renovate to target go.tool.mod files by @shuymn in https://github.com/shuymn/gh-mcp/pull/18
+- fix(deps): update module github.com/docker/docker to v28.3.1+incompatible by @renovate in https://github.com/shuymn/gh-mcp/pull/20
+
 ## [v1.0.5](https://github.com/shuymn/gh-mcp/compare/v1.0.4...v1.0.5) - 2025-07-02
 - chore: improve development tooling and configuration by @shuymn in https://github.com/shuymn/gh-mcp/pull/15
 - fix: make Renovate regex more flexible for Docker image version detection by @shuymn in https://github.com/shuymn/gh-mcp/pull/14
