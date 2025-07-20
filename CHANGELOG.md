@@ -1,5 +1,8 @@
 # Changelog
 
+## [v1.0.7](https://github.com/shuymn/gh-mcp/compare/v1.0.6...v1.0.7) - 2025-07-20
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.8.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/24
+
 ## [v1.0.6](https://github.com/shuymn/gh-mcp/compare/v1.0.5...v1.0.6) - 2025-07-12
 - fix: configure Renovate to target go.tool.mod files by @shuymn in https://github.com/shuymn/gh-mcp/pull/18
 - fix(deps): update module github.com/docker/docker to v28.3.1+incompatible by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/20
