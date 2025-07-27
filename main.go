@@ -41,7 +41,7 @@ func mainRun() int {
 	slog.SetDefault(logger)
 
 	if err := run(ctx); err != nil {
-		slog.Error("Error", "err", err)
+		slog.ErrorContext(ctx, "Error", "err", err)
 		return 1
 	}
 	return 0
@@ -105,24 +105,24 @@ func run(ctx context.Context) error {
 
 func runWithRunner(ctx context.Context, r runner) error {
 	// 1. Get Auth
-	slog.Info("🔐 Retrieving GitHub credentials...")
+	slog.InfoContext(ctx, "🔐 Retrieving GitHub credentials...")
 	auth, err := r.getAuth()
 	if err != nil {
 		return err
 	}
-	slog.Info("✅ Authenticated", "host", auth.Host)
+	slog.InfoContext(ctx, "✅ Authenticated", "host", auth.Host)
 
 	// 2. Init Docker client
-	slog.Info("🐳 Connecting to Docker...")
+	slog.InfoContext(ctx, "🐳 Connecting to Docker...")
 	cli, err := r.newDockerClient()
 	if err != nil {
 		return err
 	}
 	defer cli.Close()
-	slog.Info("✅ Docker client connected")
+	slog.InfoContext(ctx, "✅ Docker client connected")
 
 	// 3. Ensure image exists
-	slog.Info("📦 Checking for MCP server image...")
+	slog.InfoContext(ctx, "📦 Checking for MCP server image...")
 	if err := r.ensureImage(ctx, cli, mcpImage); err != nil {
 		return err
 	}
@@ -147,11 +147,11 @@ func runWithRunner(ctx context.Context, r runner) error {
 	}
 
 	// 5. Run the container and stream I/O
-	slog.Info("✅ Ready! Starting MCP server...")
+	slog.InfoContext(ctx, "✅ Ready! Starting MCP server...")
 	if err := r.runContainer(ctx, cli, env, mcpImage, defaultIOStreams()); err != nil {
 		return err
 	}
 
-	slog.Info("👋 Session ended.")
+	slog.InfoContext(ctx, "👋 Session ended.")
 	return nil
 }

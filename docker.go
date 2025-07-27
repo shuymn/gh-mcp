@@ -86,11 +86,11 @@ func newDockerClient() (dockerClientInterface, error) {
 
 // ensureImage checks if the image exists locally and pulls it if necessary
 func ensureImage(ctx context.Context, cli dockerClientInterface, imageName string) error {
-	slog.Info("Checking for image", "image", imageName)
+	slog.InfoContext(ctx, "Checking for image", "image", imageName)
 
 	_, _, err := cli.ImageInspectWithRaw(ctx, imageName)
 	if err == nil {
-		slog.Info("✓ Image found locally")
+		slog.InfoContext(ctx, "✓ Image found locally")
 		return nil // Image exists
 	}
 
@@ -98,7 +98,7 @@ func ensureImage(ctx context.Context, cli dockerClientInterface, imageName strin
 		return fmt.Errorf("failed to inspect image: %w", err)
 	}
 
-	slog.Info("⬇️  Pulling image (this may take a moment)...")
+	slog.InfoContext(ctx, "⬇️  Pulling image (this may take a moment)...")
 	reader, err := cli.ImagePull(ctx, imageName, image.PullOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to pull docker image '%s': %w", imageName, err)
@@ -110,7 +110,7 @@ func ensureImage(ctx context.Context, cli dockerClientInterface, imageName strin
 		return fmt.Errorf("failed to read image pull progress: %w", err)
 	}
 
-	slog.Info("✓ Image pulled successfully")
+	slog.InfoContext(ctx, "✓ Image pulled successfully")
 	return nil
 }
 
@@ -165,7 +165,7 @@ func runServerContainer(
 			case <-ctx.Done():
 				// Context was canceled, we're shutting down - ignore error
 			default:
-				slog.Error("Error reading from container", "err", err)
+				slog.ErrorContext(ctx, "Error reading from container", "err", err)
 			}
 		}
 	}()
@@ -181,7 +181,7 @@ func runServerContainer(
 			case <-ctx.Done():
 				// Context was canceled, we're shutting down - ignore error
 			default:
-				slog.Error("Error writing to container", "err", err)
+				slog.ErrorContext(ctx, "Error writing to container", "err", err)
 			}
 		}
 		if err := hijackedResp.CloseWrite(); err != nil {
@@ -189,7 +189,7 @@ func runServerContainer(
 			case <-ctx.Done():
 				// Context was canceled, we're shutting down - ignore error
 			default:
-				slog.Error("Error closing write to container", "err", err)
+				slog.ErrorContext(ctx, "Error closing write to container", "err", err)
 			}
 		}
 	}()
@@ -198,7 +198,7 @@ func runServerContainer(
 	if err := cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
-	slog.Info("🚀 Starting github-mcp-server in Docker. Press Ctrl+C to exit.")
+	slog.InfoContext(ctx, "🚀 Starting github-mcp-server in Docker. Press Ctrl+C to exit.")
 
 	// 5. Wait for the container to exit
 	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
@@ -207,7 +207,7 @@ func runServerContainer(
 	stopContainer := func() {
 		stopCtx := context.Background()
 		if err := cli.ContainerStop(stopCtx, resp.ID, container.StopOptions{}); err != nil {
-			slog.Warn("Failed to stop container", "err", err)
+			slog.WarnContext(stopCtx, "Failed to stop container", "err", err)
 		}
 	}
 
