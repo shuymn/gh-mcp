@@ -40,7 +40,7 @@ jobs:
     - name: Set golangci-lint version
       id: set-golangci-lint-version
       if: steps.check-branch.outputs.skip != 'true'
-      run: echo "version=v$(go tool -modfile=go.tool.mod golangci-lint version --short)" >> $GITHUB_OUTPUT
+      run: echo "version=v$(yq '.vars.GOLANGCI_LINT_VERSION' Taskfile.yml)" >> $GITHUB_OUTPUT
 
     - name: Run golangci-lint
       if: steps.check-branch.outputs.skip != 'true'
@@ -75,17 +75,23 @@ jobs:
         go-version: stable
         cache: true
 
+    - name: Install Task
+      uses: arduino/setup-task@v2
+      with:
+        version: 3.x
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Download dependencies
       if: steps.check-branch.outputs.skip != 'true'
       run: go mod download
 
     - name: Verify dependencies
       if: steps.check-branch.outputs.skip != 'true'
-      run: make deps-verify
+      run: task deps-verify
 
     - name: Run tests
       if: steps.check-branch.outputs.skip != 'true'
-      run: make test
+      run: task test
 
     - name: Run tests with coverage
       if: steps.check-branch.outputs.skip != 'true'
@@ -120,9 +126,15 @@ jobs:
         go-version: stable
         cache: true
 
+    - name: Install Task
+      uses: arduino/setup-task@v2
+      with:
+        version: 3.x
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Build binary
       if: steps.check-branch.outputs.skip != 'true'
-      run: make build
+      run: task build
 
     - name: Test binary exists and is executable
       if: steps.check-branch.outputs.skip != 'true'
