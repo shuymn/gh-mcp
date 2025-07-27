@@ -1,0 +1,106 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+vars:
+  BINARY_NAME: gh-mcp
+  COVERAGE_FILE: coverage.out
+  BIN_DIR: bin
+  GOLANGCI_LINT_VERSION: v2.2.1
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  build:
+    desc: Build the binary
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BINARY_NAME}}"
+    cmds:
+      - go build -o {{.BINARY_NAME}} .
+
+  install:
+    desc: Install gh-mcp as a GitHub CLI extension
+    deps: [build]
+    cmds:
+      - gh extension install .
+
+  uninstall:
+    desc: Uninstall gh-mcp extension
+    cmds:
+      - gh extension remove mcp
+
+  clean:
+    desc: Remove build artifacts and coverage files
+    cmds:
+      - rm -f {{.BINARY_NAME}}
+      - rm -f {{.COVERAGE_FILE}} coverage.html
+      - go clean
+
+  run:
+    desc: Build and run the extension
+    deps: [build]
+    cmds:
+      - ./{{.BINARY_NAME}}
+
+  test:
+    desc: Run tests with race detection and shuffle (10 times)
+    cmds:
+      - go test -race -shuffle=on -count=10 ./...
+
+  test:coverage:
+    desc: Run tests with coverage report
+    preconditions:
+      - sh: command -v octocov
+        msg: "octocov is not installed. Please install it first."
+    cmds:
+      - go test -race -coverprofile={{.COVERAGE_FILE}} ./...
+      - octocov ls-files
+
+  test:verbose:
+    desc: Run tests with verbose output
+    cmds:
+      - go test -v -race ./...
+
+  install:golangci-lint:
+    desc: Install golangci-lint
+    vars:
+      CURRENT_VERSION:
+        sh: '{{.BIN_DIR}}/golangci-lint version 2>/dev/null | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" | sed -n "1p" || echo ""'
+    status:
+      - test -f {{.BIN_DIR}}/golangci-lint
+      - test "v{{.CURRENT_VERSION}}" = "{{.GOLANGCI_LINT_VERSION}}"
+    cmds:
+      - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b {{.BIN_DIR}} {{.GOLANGCI_LINT_VERSION}}
+
+  lint:
+    desc: Run golangci-lint
+    deps:
+      - task: install-golangci-lint
+        silent: true
+    cmds:
+      - cmd: "{{.BIN_DIR}}/golangci-lint version"
+        silent: true
+      - "{{.BIN_DIR}}/golangci-lint run"
+
+  fmt:
+    desc: Format code using golangci-lint
+    deps:
+      - task: install-golangci-lint
+        silent: true
+    cmds:
+      - cmd: "{{.BIN_DIR}}/golangci-lint version"
+        silent: true
+      - "{{.BIN_DIR}}/golangci-lint fmt"
+
+  check:
+    desc: Run all checks (test, lint, build)
+    cmds:
+      - task: lint
+      - task: build
+      - task: test
