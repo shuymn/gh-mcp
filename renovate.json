@@ -8,35 +8,9 @@
   "labels": [
     "dependencies"
   ],
-  "gomod": {
-    "managerFilePatterns": [
-      "go.mod",
-      "go.tool.mod"
-    ]
-  },
-  "packageRules": [
-    {
-      "matchFileNames": [
-        "go.mod"
-      ],
-      "matchManagers": [
-        "gomod"
-      ],
-      "additionalBranchPrefix": "gomod-",
-      "postUpdateOptions": [
-        "gomodTidy",
-        "gomodUpdateImportPaths"
-      ]
-    },
-    {
-      "matchFileNames": [
-        "go.tool.mod"
-      ],
-      "matchManagers": [
-        "gomod"
-      ],
-      "additionalBranchPrefix": "gotool-"
-    }
+  "postUpdateOptions": [
+    "gomodTidy",
+    "gomodUpdateImportPaths"
   ],
   "customManagers": [
     {
@@ -50,6 +24,17 @@
       "datasourceTemplate": "docker",
       "depNameTemplate": "{{{depName}}}",
       "autoReplaceStringTemplate": "const mcpImage = \"{{{depName}}}@{{{newDigest}}}\" // {{{newValue}}}"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "Taskfile.yml"
+      ],
+      "matchStrings": [
+        "GOLANGCI_LINT_VERSION: (?<currentValue>v?\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "golangci/golangci-lint"
     }
   ]
 }

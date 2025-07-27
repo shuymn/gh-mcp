@@ -2,8 +2,8 @@ pre-commit:
   commands:
     fmt:
       glob: "*.go"
-      run: go tool -modfile=go.tool.mod golangci-lint fmt {staged_files}
+      run: task fmt -- {staged_files}
       stage_fixed: true
     lint:
       glob: "*.go"
-      run: go tool -modfile=go.tool.mod golangci-lint run {staged_files}
+      run: task lint -- {staged_files}
