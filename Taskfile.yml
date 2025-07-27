@@ -5,7 +5,7 @@ vars:
   BINARY_NAME: gh-mcp
   COVERAGE_FILE: coverage.out
   BIN_DIR: bin
-  GOLANGCI_LINT_VERSION: v2.2.1
+  GOLANGCI_LINT_VERSION: v2.3.0
 
 tasks:
   default:
@@ -81,7 +81,7 @@ tasks:
   lint:
     desc: Run golangci-lint
     deps:
-      - task: install-golangci-lint
+      - task: install:golangci-lint
         silent: true
     cmds:
       - cmd: "{{.BIN_DIR}}/golangci-lint version"
@@ -91,7 +91,7 @@ tasks:
   fmt:
     desc: Format code using golangci-lint
     deps:
-      - task: install-golangci-lint
+      - task: install:golangci-lint
         silent: true
     cmds:
       - cmd: "{{.BIN_DIR}}/golangci-lint version"
