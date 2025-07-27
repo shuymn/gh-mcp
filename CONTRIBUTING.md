@@ -8,7 +8,7 @@ Thank you for your interest in contributing to gh-mcp!
 
 - Go 1.21 or later
 - Docker (for testing)
-- Make (optional, for using Makefile commands)
+- Task (optional, for using Taskfile commands)
 
 ### Building from Source
 
@@ -20,8 +20,8 @@ cd gh-mcp
 # Build the extension
 go build -o gh-mcp .
 
-# Or use make
-make build
+# Or use task
+task build
 
 # Install locally as a gh extension
 gh extension install .
@@ -33,13 +33,13 @@ gh extension install .
 
 ```bash
 # Run all tests with race detection
-make test
+task test
 
 # Run with verbose output
-make test-verbose
+task test:verbose
 
 # Run with coverage
-make test-coverage
+task test:coverage
 
 # Or use go directly
 go test -race ./...
@@ -49,17 +49,17 @@ go test -race ./...
 
 ```bash
 # Run linter
-make lint
+task lint
 
 # Format code
-make fmt
+task fmt
 ```
 
 ### Checking Everything
 
 ```bash
 # Run all checks (test, lint, build)
-make check
+task check
 ```
 
 ## Project Structure
@@ -78,7 +78,7 @@ gh-mcp/
 │       └── release.yml # Release automation
 ├── .golangci.yaml    # Linter configuration
 ├── .octocov.yml      # Coverage reporting
-├── Makefile          # Build automation
+├── Taskfile.yml      # Build automation
 ├── go.mod            # Go module definition
 ├── go.sum            # Dependency checksums
 └── README.md         # User documentation
@@ -137,7 +137,7 @@ The release workflow handles all cross-platform compilation and artifact generat
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
 4. Add tests for new functionality
-5. Ensure all tests pass (`make check`)
+5. Ensure all tests pass (`task check`)
 6. Commit your changes with clear messages
 7. Push to your fork
 8. Open a Pull Request
