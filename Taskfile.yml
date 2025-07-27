@@ -104,3 +104,8 @@ tasks:
       - task: lint
       - task: build
       - task: test
+
+  deps-verify:
+    desc: Verify dependencies are correct
+    cmds:
+      - go mod verify
