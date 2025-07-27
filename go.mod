@@ -4,7 +4,7 @@ go 1.24.4
 
 require (
 	github.com/cli/go-gh/v2 v2.12.1
-	github.com/containerd/containerd v1.7.27
+	github.com/containerd/containerd v1.7.28
 	github.com/docker/docker v28.3.2+incompatible
 	github.com/opencontainers/image-spec v1.1.1
 )
@@ -33,8 +33,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.35.0 // indirect
 	go.opentelemetry.io/otel/metric v1.37.0 // indirect
 	go.opentelemetry.io/otel/trace v1.37.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
-	golang.org/x/time v0.7.0 // indirect
+	golang.org/x/sys v0.34.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
 	google.golang.org/grpc v1.73.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
