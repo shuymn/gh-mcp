@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.0.9](https://github.com/shuymn/gh-mcp/compare/v1.0.8...v1.0.9) - 2025-07-29
+- Migrate build system from Make to Task by @shuymn in https://github.com/shuymn/gh-mcp/pull/29
+- chore(deps): update dependency golangci/golangci-lint to v2.3.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/31
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.9.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/32
+
 ## [v1.0.8](https://github.com/shuymn/gh-mcp/compare/v1.0.7...v1.0.8) - 2025-07-27
 - chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.9.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/26
 - fix(deps): update module github.com/containerd/containerd to v1.7.28 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/27
