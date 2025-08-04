@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.0.10](https://github.com/shuymn/gh-mcp/compare/v1.0.9...v1.0.10) - 2025-08-04
+- chore(deps): update dependency golangci/golangci-lint to v2.3.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/35
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.10.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/34
+- fix(deps): update module github.com/docker/docker to v28.3.3+incompatible by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/33
+
 ## [v1.0.9](https://github.com/shuymn/gh-mcp/compare/v1.0.8...v1.0.9) - 2025-07-29
 - Migrate build system from Make to Task by @shuymn in https://github.com/shuymn/gh-mcp/pull/29
 - chore(deps): update dependency golangci/golangci-lint to v2.3.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/31
