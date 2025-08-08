@@ -3,7 +3,7 @@ module github.com/shuymn/gh-mcp
 go 1.24.4
 
 require (
-	github.com/cli/go-gh/v2 v2.12.1
+	github.com/cli/go-gh/v2 v2.12.2
 	github.com/containerd/containerd v1.7.28
 	github.com/docker/docker v28.3.3+incompatible
 	github.com/opencontainers/image-spec v1.1.1
