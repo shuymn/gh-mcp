@@ -1,5 +1,8 @@
 # Changelog
 
+## [v1.0.12](https://github.com/shuymn/gh-mcp/compare/v1.0.11...v1.0.12) - 2025-08-17
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.12.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/44
+
 ## [v1.0.11](https://github.com/shuymn/gh-mcp/compare/v1.0.10...v1.0.11) - 2025-08-14
 - chore(deps): update dependency golangci/golangci-lint to v2.4.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/42
 - chore(deps): update actions/checkout action to v5 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/41
