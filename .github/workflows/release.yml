@@ -17,6 +17,7 @@ jobs:
       - id: determina_release_tag
         env:
           GH_PAGER: cat
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           if [[ ${GITHUB_REF} = refs/tags/* ]]; then
@@ -25,7 +26,7 @@ jobs:
             tag="$(git describe --tags --abbrev=0)"
           fi
 
-          is_draft$(gh release view "$tag" --json isDraft -q '.isDraft' || echo "false")
+          is_draft=$(gh release view "$tag" --json isDraft -q '.isDraft' || echo "false")
           if [[ ${is_draft} != "true" ]]; then
             echo "Release $tag is not a draft or does not exist. Exiting."
             exit 1
@@ -43,6 +44,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ steps.determina_release_tag.outputs.TAG }}
           GH_PAGER: cat
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           gh release view "$RELEASE_TAG" --json isDraft -q '.isDraft' | grep "true" && gh release edit "$RELEASE_TAG" --draft=false || echo "No draft release found"
