@@ -15,7 +15,9 @@
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": ["^main\\.go$"],
+      "fileMatch": [
+        "^main\\.go$"
+      ],
       "matchStrings": [
         "const mcpImage = \"(?<depName>[^@\"]+)@(?<currentDigest>sha256:[0-9a-f]{64})\"(?:\\s*//\\s*(?<currentValue>\\S+))?"
       ],
@@ -25,7 +27,9 @@
     },
     {
       "customType": "regex",
-      "fileMatch": ["^Taskfile\\.yml$"],
+      "fileMatch": [
+        "^Taskfile\\.yml$"
+      ],
       "matchStrings": [
         "GOLANGCI_LINT_VERSION: (?<currentValue>v?\\d+\\.\\d+\\.\\d+)"
       ],
@@ -35,26 +39,53 @@
   ],
   "packageRules": [
     {
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
-      "matchUpdateTypes": ["major"],
-      "addLabels": ["major", "dependencies"]
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "addLabels": [
+        "major",
+        "dependencies"
+      ]
     },
     {
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
-      "matchUpdateTypes": ["minor"],
-      "addLabels": ["minor", "dependencies"]
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "addLabels": [
+        "minor",
+        "dependencies"
+      ]
     },
     {
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
-      "matchUpdateTypes": ["patch"],
-      "addLabels": ["dependencies"]
-    }
-    ,
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "addLabels": [
+        "dependencies"
+      ]
+    },
     {
-      "matchManagers": ["gomod"],
+      "matchManagers": [
+        "gomod"
+      ],
       "groupName": "docker + containerd",
       "matchPackageNames": [
         "github.com/docker/docker",
@@ -63,6 +94,5 @@
       "separateMajorMinor": false,
       "separateMultipleMajor": false
     }
-
   ]
 }
