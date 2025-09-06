@@ -36,7 +36,8 @@
     },
     {
       "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
-      "automerge": false
+      "automerge": false,
+      "reviewersFromCodeOwners": true
     },
     {
       "matchDatasources": ["docker"],
