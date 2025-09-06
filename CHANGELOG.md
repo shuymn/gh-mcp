@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.0.14](https://github.com/shuymn/gh-mcp/compare/v1.0.13...v1.0.14) - 2025-09-06
+- chore(deps): update songmu/tagpr digest to 5f88955 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/48
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.14.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/49
+- fix(deps): update module github.com/docker/docker to v28.4.0+incompatible by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/51
+- chore(deps): update actions/setup-go action to v6 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/52
+
 ## [v1.0.13](https://github.com/shuymn/gh-mcp/compare/v1.0.12...v1.0.13) - 2025-08-24
 - chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.13.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/46
 
