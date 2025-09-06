@@ -36,8 +36,7 @@
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "golangci/golangci-lint"
     }
-  ]
-,
+  ],
   "packageRules": [
     {
       "matchDatasources": ["docker"],
