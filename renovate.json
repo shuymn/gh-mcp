@@ -15,8 +15,8 @@
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": [
-        "^main\\.go$"
+      "managerFilePatterns": [
+        "/^main\\.go$/"
       ],
       "matchStrings": [
         "const mcpImage = \"(?<depName>[^@\"]+)@(?<currentDigest>sha256:[0-9a-f]{64})\"(?:\\s*//\\s*(?<currentValue>\\S+))?"
@@ -27,8 +27,8 @@
     },
     {
       "customType": "regex",
-      "fileMatch": [
-        "^Taskfile\\.yml$"
+      "managerFilePatterns": [
+        "/^Taskfile\\.yml$/"
       ],
       "matchStrings": [
         "GOLANGCI_LINT_VERSION: (?<currentValue>v?\\d+\\.\\d+\\.\\d+)"
