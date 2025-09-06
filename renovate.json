@@ -15,9 +15,7 @@
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": [
-        "main.go"
-      ],
+      "fileMatch": ["^main\\.go$"],
       "matchStrings": [
         "const mcpImage = \"(?<depName>[^@\"]+)@(?<currentDigest>sha256:[0-9a-f]{64})\"(?:\\s*//\\s*(?<currentValue>\\S+))?"
       ],
@@ -27,9 +25,7 @@
     },
     {
       "customType": "regex",
-      "managerFilePatterns": [
-        "Taskfile.yml"
-      ],
+      "fileMatch": ["^Taskfile\\.yml$"],
       "matchStrings": [
         "GOLANGCI_LINT_VERSION: (?<currentValue>v?\\d+\\.\\d+\\.\\d+)"
       ],
@@ -56,5 +52,17 @@
       "matchUpdateTypes": ["patch"],
       "addLabels": ["dependencies"]
     }
+    ,
+    {
+      "matchManagers": ["gomod"],
+      "groupName": "docker + containerd",
+      "matchPackageNames": [
+        "github.com/docker/docker",
+        "github.com/containerd/containerd"
+      ],
+      "separateMajorMinor": false,
+      "separateMultipleMajor": false
+    }
+
   ]
 }
