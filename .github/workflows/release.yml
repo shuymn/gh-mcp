@@ -47,4 +47,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release view "$RELEASE_TAG" --json isDraft -q '.isDraft' | grep "true" && gh release edit "$RELEASE_TAG" --draft=false || echo "No draft release found"
+          gh release view "$RELEASE_TAG" --json isDraft -q '.isDraft' | grep "true" >/dev/null && gh release edit "$RELEASE_TAG" --draft=false || echo "No draft release found"
