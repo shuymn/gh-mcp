@@ -5,19 +5,12 @@
     "config:best-practices",
     ":timezone(Asia/Tokyo)"
   ],
-  "labels": [
-    "dependencies"
-  ],
-  "postUpdateOptions": [
-    "gomodTidy",
-    "gomodUpdateImportPaths"
-  ],
+  "labels": ["dependencies"],
+  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": [
-        "/^main\\.go$/"
-      ],
+      "managerFilePatterns": ["/^main\\.go$/"],
       "matchStrings": [
         "const mcpImage = \"(?<depName>[^@\"]+)@(?<currentDigest>sha256:[0-9a-f]{64})\"(?:\\s*//\\s*(?<currentValue>\\S+))?"
       ],
@@ -27,9 +20,7 @@
     },
     {
       "customType": "regex",
-      "managerFilePatterns": [
-        "/^Taskfile\\.yml$/"
-      ],
+      "managerFilePatterns": ["/^Taskfile\\.yml$/"],
       "matchStrings": [
         "GOLANGCI_LINT_VERSION: (?<currentValue>v?\\d+\\.\\d+\\.\\d+)"
       ],
@@ -39,60 +30,37 @@
   ],
   "packageRules": [
     {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchPackageNames": [
-        "ghcr.io/github/github-mcp-server"
-      ],
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "addLabels": [
-        "major",
-        "dependencies"
-      ]
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchCurrentVersion": "!/^0/",
+      "automerge": true
     },
     {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchPackageNames": [
-        "ghcr.io/github/github-mcp-server"
-      ],
-      "matchUpdateTypes": [
-        "minor"
-      ],
-      "addLabels": [
-        "minor",
-        "dependencies"
-      ]
+      "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
+      "automerge": false
     },
     {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchPackageNames": [
-        "ghcr.io/github/github-mcp-server"
-      ],
-      "matchUpdateTypes": [
-        "patch"
-      ],
-      "addLabels": [
-        "dependencies"
-      ]
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
+      "matchUpdateTypes": ["major"],
+      "addLabels": ["major", "dependencies"]
     },
     {
-      "matchManagers": [
-        "gomod"
-      ],
-      "groupName": "docker + containerd",
-      "matchPackageNames": [
-        "github.com/docker/docker",
-        "github.com/containerd/containerd"
-      ],
-      "separateMajorMinor": false,
-      "separateMultipleMajor": false
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
+      "matchUpdateTypes": ["minor"],
+      "addLabels": ["minor", "dependencies"]
+    },
+    {
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
+      "matchUpdateTypes": ["patch"],
+      "addLabels": ["dependencies"]
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["github.com/containerd/containerd"],
+      "matchUpdateTypes": ["major"],
+      "prCreation": "status-success"
     }
   ]
 }
