@@ -44,13 +44,13 @@
       "matchDatasources": ["docker"],
       "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
       "matchUpdateTypes": ["major"],
-      "addLabels": ["major", "dependencies"]
+      "addLabels": ["tagpr:major", "dependencies"]
     },
     {
       "matchDatasources": ["docker"],
       "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
       "matchUpdateTypes": ["minor"],
-      "addLabels": ["minor", "dependencies"]
+      "addLabels": ["tagpr:minor", "dependencies"]
     },
     {
       "matchDatasources": ["docker"],
