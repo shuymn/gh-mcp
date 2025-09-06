@@ -32,17 +32,17 @@ jobs:
             exit 1
           fi
 
-          echo "TAG=$tag" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - uses: cli/gh-extension-precompile@9e2237c30f869ad3bcaed6a4be2cd43564dd421b # v2.1.0
         with:
           generate_attestations: true
           go_version_file: go.mod
-          release_tag: ${{ steps.determina_release_tag.outputs.TAG }}
+          release_tag: ${{ steps.determina_release_tag.outputs.tag }}
 
       - name: Publish draft release if exists
         env:
-          RELEASE_TAG: ${{ steps.determina_release_tag.outputs.TAG }}
+          RELEASE_TAG: ${{ steps.determina_release_tag.outputs.tag }}
           GH_PAGER: cat
           GH_TOKEN: ${{ github.token }}
         shell: bash
