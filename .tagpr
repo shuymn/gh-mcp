@@ -13,7 +13,7 @@ vPrefix = true
 changelog = true
 
 # Create GitHub releases after tagging
-release = true
+release = draft
 
 # Labels for version bumps
 majorLabels = major
