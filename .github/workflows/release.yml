@@ -12,8 +12,37 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
-      - uses: cli/gh-extension-precompile@v2
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - id: determina_release_tag
+        env:
+          GH_PAGER: cat
+        shell: bash
+        run: |
+          if [[ ${GITHUB_REF} = refs/tags/* ]]; then
+            tag="${GITHUB_REF#refs/tags/}"
+          else
+            tag="$(git describe --tags --abbrev=0)"
+          fi
+
+          is_draft$(gh release view "$tag" --json isDraft -q '.isDraft' || echo "false")
+          if [[ ${is_draft} != "true" ]]; then
+            echo "Release $tag is not a draft or does not exist. Exiting."
+            exit 1
+          fi
+
+          echo "TAG=$tag" >> "$GITHUB_OUTPUT"
+
+      - uses: cli/gh-extension-precompile@9e2237c30f869ad3bcaed6a4be2cd43564dd421b # v2.1.0
         with:
           generate_attestations: true
           go_version_file: go.mod
+          release_tag: ${{ steps.determina_release_tag.outputs.TAG }}
+
+      - name: Publish draft release if exists
+        env:
+          RELEASE_TAG: ${{ steps.determina_release_tag.outputs.TAG }}
+          GH_PAGER: cat
+        shell: bash
+        run: |
+          gh release view "$RELEASE_TAG" --json isDraft -q '.isDraft' | grep "true" && gh release edit "$RELEASE_TAG" --draft=false || echo "No draft release found"
