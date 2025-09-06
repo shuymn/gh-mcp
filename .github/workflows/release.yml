@@ -20,6 +20,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          set -e
+
           if [[ ${GITHUB_REF} = refs/tags/* ]]; then
             tag="${GITHUB_REF#refs/tags/}"
           else
@@ -47,4 +49,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release view "$RELEASE_TAG" --json isDraft -q '.isDraft' | grep "true" >/dev/null && gh release edit "$RELEASE_TAG" --draft=false || echo "No draft release found"
+          set -e
+
+          is_draft=$(gh release view "$RELEASE_TAG" --json isDraft -q '.isDraft' || echo "false")
+          if [[ ${is_draft} != "true" ]]; then
+            echo "No draft release found"
+          else
+            gh release edit "$RELEASE_TAG" --draft=false
+          fi
