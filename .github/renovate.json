@@ -1,12 +1,13 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended",
-    "config:best-practices",
-    ":timezone(Asia/Tokyo)"
-  ],
+  "extends": ["config:best-practices", ":timezone(Asia/Tokyo)"],
   "labels": ["dependencies"],
   "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
+  "prHourlyLimit": 0,
+  "minimumReleaseAge": "3 days",
+  "internalChecksAsSuccess": true,
+  "reviewersFromCodeOwners": true,
+  "assignAutomerge": true,
   "customManagers": [
     {
       "customType": "regex",
@@ -31,13 +32,13 @@
   "packageRules": [
     {
       "matchUpdateTypes": ["minor", "patch"],
-      "matchCurrentVersion": "!/^0/",
+      "matchCurrentVersion": ">=1.0.0",
       "automerge": true
     },
     {
+      "matchDatasources": ["docker"],
       "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
-      "automerge": false,
-      "reviewersFromCodeOwners": true
+      "automerge": false
     },
     {
       "matchDatasources": ["docker"],
