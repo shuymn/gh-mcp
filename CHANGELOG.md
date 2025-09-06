@@ -1,5 +1,8 @@
 # Changelog
 
+## [v1.0.16](https://github.com/shuymn/gh-mcp/compare/v1.0.15...v1.0.16) - 2025-09-06
+- fix(workflow): improve GitHub Actions release workflow reliability by @shuymn in https://github.com/shuymn/gh-mcp/pull/61
+
 ## [v1.0.15](https://github.com/shuymn/gh-mcp/compare/v1.0.14...v1.0.15) - 2025-09-06
 - Align semver behavior with github-mcp-server via Renovate labels for tagpr by @devin-ai-integration[bot] in https://github.com/shuymn/gh-mcp/pull/53
 - chore(renovate): unify formatting; use fileMatch; group docker+containerd gomod updates by @shuymn in https://github.com/shuymn/gh-mcp/pull/55
