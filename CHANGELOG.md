@@ -1,5 +1,8 @@
 # Changelog
 
+## [v1.0.17](https://github.com/shuymn/gh-mcp/compare/v1.0.16...v1.0.17) - 2025-09-06
+- chore(renovate): update labels to use tagpr prefix by @shuymn in https://github.com/shuymn/gh-mcp/pull/63
+
 ## [v1.0.16](https://github.com/shuymn/gh-mcp/compare/v1.0.15...v1.0.16) - 2025-09-06
 - fix(workflow): improve GitHub Actions release workflow reliability by @shuymn in https://github.com/shuymn/gh-mcp/pull/61
 
