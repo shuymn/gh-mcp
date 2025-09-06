@@ -37,4 +37,25 @@
       "depNameTemplate": "golangci/golangci-lint"
     }
   ]
+,
+  "packageRules": [
+    {
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
+      "matchUpdateTypes": ["major"],
+      "addLabels": ["major", "dependencies"]
+    },
+    {
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
+      "matchUpdateTypes": ["minor"],
+      "addLabels": ["minor", "dependencies"]
+    },
+    {
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
+      "matchUpdateTypes": ["patch"],
+      "addLabels": ["dependencies"]
+    }
+  ]
 }
