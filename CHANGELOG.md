@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.0.15](https://github.com/shuymn/gh-mcp/compare/v1.0.14...v1.0.15) - 2025-09-06
+- Align semver behavior with github-mcp-server via Renovate labels for tagpr by @devin-ai-integration[bot] in https://github.com/shuymn/gh-mcp/pull/53
+- chore(renovate): unify formatting; use fileMatch; group docker+containerd gomod updates by @shuymn in https://github.com/shuymn/gh-mcp/pull/55
+- chore(config): migrate renovate config by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/57
+- chore(config): simplify renovate config and add code owner reviews by @shuymn in https://github.com/shuymn/gh-mcp/pull/58
+- chore(config): enhance renovate configuration with improved settings by @shuymn in https://github.com/shuymn/gh-mcp/pull/59
+- feat: enhance release workflow with draft release support by @shuymn in https://github.com/shuymn/gh-mcp/pull/60
+
 ## [v1.0.14](https://github.com/shuymn/gh-mcp/compare/v1.0.13...v1.0.14) - 2025-09-06
 - chore(deps): update songmu/tagpr digest to 5f88955 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/48
 - chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.14.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/49
