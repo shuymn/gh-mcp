@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.0.17](https://github.com/shuymn/gh-mcp/compare/v1.0.16...v1.0.17) - 2025-09-16
+- chore(renovate): update labels to use tagpr prefix by @shuymn in https://github.com/shuymn/gh-mcp/pull/63
+- chore(deps): update songmu/tagpr action to v1.9.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/65
+- chore(deps): update actions/create-github-app-token digest to 6701853 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/66
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.15.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/67
+
 ## [v1.0.16](https://github.com/shuymn/gh-mcp/compare/v1.0.15...v1.0.16) - 2025-09-06
 - fix(workflow): improve GitHub Actions release workflow reliability by @shuymn in https://github.com/shuymn/gh-mcp/pull/61
 
