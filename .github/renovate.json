@@ -38,19 +38,20 @@
     {
       "matchDatasources": ["docker"],
       "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
-      "automerge": false
+      "automerge": false,
+      "minimumReleaseAge": "0 days"
     },
     {
       "matchDatasources": ["docker"],
       "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
       "matchUpdateTypes": ["major"],
-      "addLabels": ["tagpr:major", "dependencies"]
+      "addLabels": ["renovate:major", "dependencies"]
     },
     {
       "matchDatasources": ["docker"],
       "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
       "matchUpdateTypes": ["minor"],
-      "addLabels": ["tagpr:minor", "dependencies"]
+      "addLabels": ["renovate:minor", "dependencies"]
     },
     {
       "matchDatasources": ["docker"],
