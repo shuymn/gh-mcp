@@ -11,7 +11,7 @@ permissions:
 jobs:
   renovate:
     runs-on: ubuntu-latest
-    if: startsWith(github.head_ref, 'renovate/') && startsWith(github.event.pull_request.labels.*.name, 'renovate:')
+    if: startsWith(github.head_ref, 'renovate/') && startsWith(github.event.label.name, 'renovate:')
 
     steps:
       - name: Checkout code
@@ -21,7 +21,7 @@ jobs:
 
       - name: Bump minor version
         id: bump-minor
-        if: github.event.pull_request.labels.*.name == 'renovate:minor'
+        if: github.event.label.name == 'renovate:minor'
         run: |
           set -euo pipefail
           ver=$(cat VERSION 2>/dev/null || echo "0.0.0")
@@ -34,7 +34,7 @@ jobs:
 
       - name: Bump major version
         id: bump-major
-        if: github.event.pull_request.labels.*.name == 'renovate:major'
+        if: github.event.label.name == 'renovate:major'
         run: |
           set -euo pipefail
           ver=$(cat VERSION 2>/dev/null || echo "0.0.0")
