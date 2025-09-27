@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.2.0](https://github.com/shuymn/gh-mcp/compare/v1.1.0...v1.2.0) - 2025-09-27
+- chore: implement automated version bump workflow for renovate PRs by @shuymn in https://github.com/shuymn/gh-mcp/pull/70
+- fix(ci): correct label syntax in GitHub Actions workflow by @shuymn in https://github.com/shuymn/gh-mcp/pull/72
+- ci: improve workflow branch checkout and push handling by @shuymn in https://github.com/shuymn/gh-mcp/pull/73
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.16.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/69
+- ci: remove skip ci from workflow commit message by @shuymn in https://github.com/shuymn/gh-mcp/pull/74
+- chore(deps): update dependency golangci/golangci-lint to v2.5.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/68
+
 ## [v1.0.17](https://github.com/shuymn/gh-mcp/compare/v1.0.16...v1.0.17) - 2025-09-16
 - chore(renovate): update labels to use tagpr prefix by @shuymn in https://github.com/shuymn/gh-mcp/pull/63
 - chore(deps): update songmu/tagpr action to v1.9.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/65
