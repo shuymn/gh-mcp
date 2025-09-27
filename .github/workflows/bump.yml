@@ -56,5 +56,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add VERSION
-          git commit -m "chore: bump version to ${new:?} [skip ci]" || echo "no changes"
+          git commit -m "chore: bump version to ${new:?}" || echo "no changes"
           git push origin HEAD:"${GITHUB_HEAD_REF:?}"
