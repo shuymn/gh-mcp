@@ -1,5 +1,8 @@
 # Changelog
 
+## [v1.3.0](https://github.com/shuymn/gh-mcp/compare/v1.2.0...v1.3.0) - 2025-10-01
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.17.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/76
+
 ## [v1.2.0](https://github.com/shuymn/gh-mcp/compare/v1.1.0...v1.2.0) - 2025-09-27
 - chore: implement automated version bump workflow for renovate PRs by @shuymn in https://github.com/shuymn/gh-mcp/pull/70
 - fix(ci): correct label syntax in GitHub Actions workflow by @shuymn in https://github.com/shuymn/gh-mcp/pull/72
