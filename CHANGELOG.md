@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.4.0](https://github.com/shuymn/gh-mcp/compare/v1.3.1...v1.4.0) - 2025-10-12
+- fix(deps): update module github.com/docker/docker to v28.5.0+incompatible by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/80
+- fix(deps): update module github.com/docker/docker to v28.5.1+incompatible by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/83
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.18.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/82
+
 ## [v1.3.1](https://github.com/shuymn/gh-mcp/compare/v1.3.0...v1.3.1) - 2025-10-02
 - chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.17.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/78
 
