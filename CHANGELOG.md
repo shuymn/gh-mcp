@@ -1,5 +1,8 @@
 # Changelog
 
+## [v1.6.1](https://github.com/shuymn/gh-mcp/compare/v1.6.0...v1.6.1) - 2025-10-30
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.20.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/91
+
 ## [v1.6.0](https://github.com/shuymn/gh-mcp/compare/v1.5.1...v1.6.0) - 2025-10-30
 - chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.20.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/88
 
