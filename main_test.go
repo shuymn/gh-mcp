@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"testing"
 )
 
@@ -196,14 +197,7 @@ func TestOptionalEnvironmentVariables(t *testing.T) {
 	}
 
 	for key, expectedValue := range expectedEnvs {
-		found := false
-		for _, env := range mock.capturedEnv {
-			if env == key+"="+expectedValue {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !slices.Contains(mock.capturedEnv, key+"="+expectedValue) {
 			t.Errorf("Expected env var %s=%s not found in %v", key, expectedValue, mock.capturedEnv)
 		}
 	}
@@ -246,14 +240,7 @@ func TestOptionalEnvironmentVariablesNotSet(t *testing.T) {
 	}
 
 	for key, expectedValue := range requiredEnvs {
-		found := false
-		for _, env := range mock.capturedEnv {
-			if env == key+"="+expectedValue {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !slices.Contains(mock.capturedEnv, key+"="+expectedValue) {
 			t.Errorf("Expected env var %s=%s not found in %v", key, expectedValue, mock.capturedEnv)
 		}
 	}
