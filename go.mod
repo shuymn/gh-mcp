@@ -4,7 +4,7 @@ go 1.24.4
 
 require (
 	github.com/cli/go-gh/v2 v2.12.2
-	github.com/containerd/containerd v1.7.28
+	github.com/containerd/containerd v1.7.29
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/opencontainers/image-spec v1.1.1
 )
