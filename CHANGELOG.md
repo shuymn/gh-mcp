@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.6.2](https://github.com/shuymn/gh-mcp/compare/v1.6.1...v1.6.2) - 2025-11-11
+- chore(deps): update dependency golangci/golangci-lint to v2.6.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/93
+- chore(deps): update actions/upload-artifact action to v5 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/89
+- fix(deps): update module github.com/docker/docker to v28.5.2+incompatible by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/97
+- fix(deps): update module github.com/containerd/containerd to v1.7.29 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/98
+- chore(deps): update dependency golangci/golangci-lint to v2.6.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/96
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.20.2 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/99
+
 ## [v1.6.1](https://github.com/shuymn/gh-mcp/compare/v1.6.0...v1.6.1) - 2025-10-30
 - chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.20.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/91
 
