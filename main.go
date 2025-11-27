@@ -9,7 +9,7 @@ import (
 	"syscall"
 )
 
-const mcpImage = "ghcr.io/github/github-mcp-server@sha256:0ec492d752a22642c4c1151914c8f3b47a620c0d7ea1249a50f2769af47c02d4" // v0.22.0
+const mcpImage = "ghcr.io/github/github-mcp-server@sha256:632d024d8264e73e44b7e00d2d3722f7d26c56a21d8e9984f43e81c201477f20" // v0.23.0
 
 func main() {
 	os.Exit(mainRun())
