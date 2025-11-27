@@ -136,8 +136,10 @@ func runWithRunner(ctx context.Context, r runner) error {
 	// Pass through optional environment variables if they are set
 	optionalEnvVars := []string{
 		"GITHUB_TOOLSETS",
+		"GITHUB_TOOLS",
 		"GITHUB_DYNAMIC_TOOLSETS",
 		"GITHUB_READ_ONLY",
+		"GITHUB_LOCKDOWN_MODE",
 	}
 
 	for _, envVar := range optionalEnvVars {
