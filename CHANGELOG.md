@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.10.0](https://github.com/shuymn/gh-mcp/compare/v1.9.0...v1.10.0) - 2025-12-04
+- chore(deps): update golangci/golangci-lint-action action to v9.1.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/109
+- chore(deps): update actions/checkout action to v6 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/107
+- chore(deps): update actions/setup-go action to v6.1.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/106
+- chore(deps): update actions/create-github-app-token digest to 7e473ef by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/105
+- fix(deps): update module github.com/cli/go-gh/v2 to v2.13.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/95
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.24.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/115
+
 ## [v1.9.0](https://github.com/shuymn/gh-mcp/compare/v1.8.0...v1.9.0) - 2025-11-27
 - chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.23.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/111
 
