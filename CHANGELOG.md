@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.10.1](https://github.com/shuymn/gh-mcp/compare/v1.10.0...v1.10.1) - 2025-12-08
+- fix(ci): prevent duplicate version bumps in workflow by @shuymn in https://github.com/shuymn/gh-mcp/pull/116
+- chore(deps): update dependency go to v1.25.5 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/119
+- chore(deps): update actions/checkout action to v6.0.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/120
+- chore(deps): update golangci/golangci-lint-action action to v9.2.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/117
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.24.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/122
+
 ## [v1.10.0](https://github.com/shuymn/gh-mcp/compare/v1.9.0...v1.10.0) - 2025-12-04
 - chore(deps): update golangci/golangci-lint-action action to v9.1.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/109
 - chore(deps): update actions/checkout action to v6 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/107
