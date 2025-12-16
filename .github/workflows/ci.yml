@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_run:
+    workflows: [ Bump ]
+    types: [ completed ]
 
 permissions:
   contents: read
@@ -15,12 +18,15 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
     - name: Check if tagpr branch
       id: check-branch
+      env:
+        BRANCH_NAME: ${{ github.event.workflow_run.head_branch || github.head_ref || github.ref_name }}
       run: |
-        if [[ "${{ github.head_ref || github.ref_name }}" == tagpr-from-v* ]]; then
+        if [[ "${BRANCH_NAME}" == tagpr-from-v* ]]; then
           echo "skip=true" >> $GITHUB_OUTPUT
         else
           echo "skip=false" >> $GITHUB_OUTPUT
@@ -29,6 +35,9 @@ jobs:
     - name: Checkout code
       if: steps.check-branch.outputs.skip != 'true'
       uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      with:
+        repository: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_repository.full_name || github.repository }}
+        ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
     - name: Set up Go
       if: steps.check-branch.outputs.skip != 'true'
@@ -53,12 +62,15 @@ jobs:
     name: Test
     needs: lint
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
     - name: Check if tagpr branch
       id: check-branch
+      env:
+        BRANCH_NAME: ${{ github.event.workflow_run.head_branch || github.head_ref || github.ref_name }}
       run: |
-        if [[ "${{ github.head_ref || github.ref_name }}" == tagpr-from-v* ]]; then
+        if [[ "${BRANCH_NAME}" == tagpr-from-v* ]]; then
           echo "skip=true" >> $GITHUB_OUTPUT
         else
           echo "skip=false" >> $GITHUB_OUTPUT
@@ -67,6 +79,9 @@ jobs:
     - name: Checkout code
       if: steps.check-branch.outputs.skip != 'true'
       uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      with:
+        repository: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_repository.full_name || github.repository }}
+        ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
     - name: Set up Go
       if: steps.check-branch.outputs.skip != 'true'
@@ -104,12 +119,15 @@ jobs:
     name: Build
     needs: test
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
     - name: Check if tagpr branch
       id: check-branch
+      env:
+        BRANCH_NAME: ${{ github.event.workflow_run.head_branch || github.head_ref || github.ref_name }}
       run: |
-        if [[ "${{ github.head_ref || github.ref_name }}" == tagpr-from-v* ]]; then
+        if [[ "${BRANCH_NAME}" == tagpr-from-v* ]]; then
           echo "skip=true" >> $GITHUB_OUTPUT
         else
           echo "skip=false" >> $GITHUB_OUTPUT
@@ -118,6 +136,9 @@ jobs:
     - name: Checkout code
       if: steps.check-branch.outputs.skip != 'true'
       uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      with:
+        repository: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_repository.full_name || github.repository }}
+        ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
     - name: Set up Go
       if: steps.check-branch.outputs.skip != 'true'
