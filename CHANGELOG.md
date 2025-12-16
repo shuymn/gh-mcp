@@ -1,5 +1,14 @@
 # Changelog
 
+## [v1.11.0](https://github.com/shuymn/gh-mcp/compare/v1.10.1...v1.11.0) - 2025-12-16
+- chore(deps): update dependency golangci/golangci-lint to v2.7.2 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/121
+- chore(deps): update actions/create-github-app-token action to v2.2.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/123
+- ci: Trigger CI workflow on Bump workflow completion by @shuymn in https://github.com/shuymn/gh-mcp/pull/128
+- chore(deps): update songmu/tagpr action to v1.9.2 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/126
+- chore(deps): update actions/upload-artifact action to v6 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/125
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.25.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/127
+- Revert "ci: Trigger CI workflow on Bump workflow completion" by @shuymn in https://github.com/shuymn/gh-mcp/pull/129
+
 ## [v1.10.1](https://github.com/shuymn/gh-mcp/compare/v1.10.0...v1.10.1) - 2025-12-08
 - fix(ci): prevent duplicate version bumps in workflow by @shuymn in https://github.com/shuymn/gh-mcp/pull/116
 - chore(deps): update dependency go to v1.25.5 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/119
