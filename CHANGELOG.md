@@ -5,6 +5,11 @@
 - chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.26.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/132
 - chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.26.2 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/133
 
+## [v1.12.0](https://github.com/shuymn/gh-mcp/compare/v1.11.0...v1.12.0) - 2025-12-19
+- chore(deps): update songmu/tagpr action to v1.10.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/130
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.26.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/132
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.26.2 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/133
+
 ## [v1.11.0](https://github.com/shuymn/gh-mcp/compare/v1.10.1...v1.11.0) - 2025-12-16
 - chore(deps): update dependency golangci/golangci-lint to v2.7.2 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/121
 - chore(deps): update actions/create-github-app-token action to v2.2.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/123
