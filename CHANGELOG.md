@@ -1,5 +1,8 @@
 # Changelog
 
+## [v1.12.2](https://github.com/shuymn/gh-mcp/compare/v1.12.1...v1.12.2) - 2025-12-21
+- fix(deps): update module github.com/containerd/containerd to v1.7.30 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/137
+
 ## [v1.12.1](https://github.com/shuymn/gh-mcp/compare/v1.12.0...v1.12.1) - 2025-12-20
 - chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.26.3 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/135
 
