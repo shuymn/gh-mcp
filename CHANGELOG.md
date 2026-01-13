@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.14.0](https://github.com/shuymn/gh-mcp/compare/v1.13.0...v1.14.0) - 2026-01-13
+- chore(deps): update songmu/tagpr action to v1.11.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/140
+- chore(deps): update dependency golangci/golangci-lint to v2.8.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/142
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.28.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/143
+
 ## [v1.13.0](https://github.com/shuymn/gh-mcp/compare/v1.12.1...v1.13.0) - 2026-01-06
 - fix(deps): update module github.com/containerd/containerd to v1.7.30 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/137
 - chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.27.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/139
