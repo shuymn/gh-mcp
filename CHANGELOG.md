@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.15.0](https://github.com/shuymn/gh-mcp/compare/v1.14.0...v1.15.0) - 2026-01-22
+- chore(deps): update dependency go to v1.25.6 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/146
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.29.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/148
+- chore(deps): update songmu/tagpr action to v1.11.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/144
+- chore(deps): update actions/setup-go action to v6.2.0 - autoclosed by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/145
+
 ## [v1.14.0](https://github.com/shuymn/gh-mcp/compare/v1.13.0...v1.14.0) - 2026-01-13
 - chore(deps): update songmu/tagpr action to v1.11.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/140
 - chore(deps): update dependency golangci/golangci-lint to v2.8.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/142
