@@ -5,6 +5,11 @@
 - chore(deps): update songmu/tagpr action to v1.14.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/150
 - chore(deps): update actions/checkout action to v6.0.2 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/149
 
+## [v1.16.0](https://github.com/shuymn/gh-mcp/compare/v1.15.0...v1.16.0) - 2026-02-04
+- chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.30.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/151
+- chore(deps): update songmu/tagpr action to v1.14.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/150
+- chore(deps): update actions/checkout action to v6.0.2 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/149
+
 ## [v1.15.0](https://github.com/shuymn/gh-mcp/compare/v1.14.0...v1.15.0) - 2026-01-22
 - chore(deps): update dependency go to v1.25.6 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/146
 - chore(deps): update ghcr.io/github/github-mcp-server docker tag to v0.29.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/148
