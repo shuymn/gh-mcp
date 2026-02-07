@@ -2,7 +2,7 @@ module github.com/shuymn/gh-mcp
 
 go 1.25.0
 
-toolchain go1.25.6
+toolchain go1.25.7
 
 require (
 	github.com/cli/go-gh/v2 v2.13.0
