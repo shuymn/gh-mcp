@@ -5,7 +5,7 @@ vars:
   BINARY_NAME: gh-mcp
   COVERAGE_FILE: coverage.out
   BIN_DIR: bin
-  GOLANGCI_LINT_VERSION: v2.8.0
+  GOLANGCI_LINT_VERSION: v2.9.0
 
 tasks:
   default:
