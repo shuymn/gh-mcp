@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 )
 
 const mcpImage = "ghcr.io/github/github-mcp-server@sha256:a2b5fb79b1cee851bfc3532dfe480c3dc5736974ca9d93a7a9f68e52ce4b62a0" // v0.30.3
@@ -45,9 +48,8 @@ func mainRun() int {
 		// flag.FlagSet will have already written details to stderr (via fs.SetOutput)
 		return 2
 	}
-	_ = opts
 
-	if err := run(ctx); err != nil {
+	if err := run(ctx, opts); err != nil {
 		slog.ErrorContext(ctx, "Error", "err", err)
 		return 1
 	}
@@ -58,7 +60,8 @@ func mainRun() int {
 type runner interface {
 	getAuth() (*authDetails, error)
 	newDockerClient() (dockerClientInterface, error)
-	ensureImage(ctx context.Context, cli dockerClientInterface, imageName string) error
+	newDockerClientWithHost(host string) (dockerClientInterface, error)
+	ensureImage(ctx context.Context, cli dockerClientInterface, imageName string, progress io.Writer) error
 	runContainer(
 		ctx context.Context,
 		cli dockerClientInterface,
@@ -81,6 +84,10 @@ func (r *realRunner) newDockerClient() (dockerClientInterface, error) {
 	return newDockerClient()
 }
 
+func (r *realRunner) newDockerClientWithHost(host string) (dockerClientInterface, error) {
+	return newDockerClientWithHost(host)
+}
+
 func (r *realRunner) getAuthInterface() authInterface {
 	if r.authInterface == nil {
 		r.authInterface = &realAuth{}
@@ -92,8 +99,9 @@ func (r *realRunner) ensureImage(
 	ctx context.Context,
 	cli dockerClientInterface,
 	imageName string,
+	progress io.Writer,
 ) error {
-	return ensureImage(ctx, cli, imageName)
+	return ensureImage(ctx, cli, imageName, progress)
 }
 
 func (r *realRunner) runContainer(
@@ -106,11 +114,12 @@ func (r *realRunner) runContainer(
 	return runServerContainer(ctx, cli, env, imageName, streams)
 }
 
-func run(ctx context.Context) error {
-	return runWithRunner(ctx, &realRunner{})
+func run(ctx context.Context, opts options) error {
+	return runWithRunner(ctx, &realRunner{}, opts)
 }
 
-func runWithRunner(ctx context.Context, r runner) error {
+func runWithRunner(ctx context.Context, r runner, opts options) error {
+	_ = opts
 	// 1. Get Auth
 	slog.InfoContext(ctx, "🔐 Retrieving GitHub credentials...")
 	auth, err := r.getAuth()
@@ -126,11 +135,17 @@ func runWithRunner(ctx context.Context, r runner) error {
 		return err
 	}
 	defer cli.Close()
+
+	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if _, err := cli.Ping(pingCtx); err != nil {
+		return fmt.Errorf("%w: %w", ErrDockerUnavailable, err)
+	}
 	slog.InfoContext(ctx, "✅ Docker client connected")
 
 	// 3. Ensure image exists
 	slog.InfoContext(ctx, "📦 Checking for MCP server image...")
-	if err := r.ensureImage(ctx, cli, mcpImage); err != nil {
+	if err := r.ensureImage(ctx, cli, mcpImage, defaultIOStreams().err); err != nil {
 		return err
 	}
 

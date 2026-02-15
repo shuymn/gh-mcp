@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"slices"
 	"testing"
@@ -40,7 +41,16 @@ func (m *mockRunner) newDockerClient() (dockerClientInterface, error) {
 	return m.dockerClient, m.dockerClientErr
 }
 
-func (m *mockRunner) ensureImage(_ context.Context, _ dockerClientInterface, _ string) error {
+func (m *mockRunner) newDockerClientWithHost(_ string) (dockerClientInterface, error) {
+	return m.dockerClient, m.dockerClientErr
+}
+
+func (m *mockRunner) ensureImage(
+	_ context.Context,
+	_ dockerClientInterface,
+	_ string,
+	_ io.Writer,
+) error {
 	return m.ensureImageErr
 }
 
@@ -127,7 +137,7 @@ func TestRunWithRunner(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := runWithRunner(t.Context(), tt.mock)
+			err := runWithRunner(t.Context(), tt.mock, options{engine: engineAuto})
 
 			if tt.wantErr != "" {
 				if err == nil {
@@ -160,7 +170,7 @@ func TestEnvironmentVariables(t *testing.T) {
 	}
 
 	ctx := t.Context()
-	_ = runWithRunner(ctx, mock)
+	_ = runWithRunner(ctx, mock, options{engine: engineAuto})
 
 	// The test passes if the error is as expected
 	// In a real test, we'd capture the env variables passed to runContainer
@@ -182,7 +192,7 @@ func TestOptionalEnvironmentVariables(t *testing.T) {
 	}
 
 	ctx := t.Context()
-	err := runWithRunner(ctx, mock)
+	err := runWithRunner(ctx, mock, options{engine: engineAuto})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -218,7 +228,7 @@ func TestOptionalEnvironmentVariablesNotSet(t *testing.T) {
 	}
 
 	ctx := t.Context()
-	err := runWithRunner(ctx, mock)
+	err := runWithRunner(ctx, mock, options{engine: engineAuto})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -31,6 +31,7 @@ var (
 
 // mockDockerClient implements dockerClientInterface for testing
 type mockDockerClient struct {
+	pingErr            error
 	imageInspectErr     error
 	imagePullErr        error
 	imagePullResponse   string
@@ -40,6 +41,10 @@ type mockDockerClient struct {
 	containerStartErr   error
 	containerWaitStatus int64
 	containerWaitErr    error
+}
+
+func (m *mockDockerClient) Ping(_ context.Context) (types.Ping, error) {
+	return types.Ping{}, m.pingErr
 }
 
 func (m *mockDockerClient) ImageInspectWithRaw(
@@ -170,7 +175,7 @@ func TestEnsureImage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ensureImage(t.Context(), tt.mock, tt.imageName)
+			err := ensureImage(t.Context(), tt.mock, tt.imageName, io.Discard)
 
 			if tt.wantErr != "" {
 				if err == nil {

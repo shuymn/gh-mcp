@@ -38,10 +38,13 @@ func defaultIOStreams() *ioStreams {
 var (
 	// ErrContainerNonZeroExit is a sentinel error for container non-zero exit
 	ErrContainerNonZeroExit = errors.New("container exited with non-zero status")
+	// ErrDockerUnavailable is a sentinel error for docker daemon/socket unavailable
+	ErrDockerUnavailable = errors.New("docker unavailable")
 )
 
 // dockerClientInterface defines the methods we need from the Docker client for testing
 type dockerClientInterface interface {
+	Ping(ctx context.Context) (types.Ping, error)
 	ImageInspectWithRaw(ctx context.Context, imageID string) (image.InspectResponse, []byte, error)
 	ImagePull(ctx context.Context, refStr string, options image.PullOptions) (io.ReadCloser, error)
 	ContainerCreate(
@@ -84,8 +87,26 @@ func newDockerClient() (dockerClientInterface, error) {
 	return &realDockerClient{cli}, nil
 }
 
+// newDockerClientWithHost creates a Docker client for an explicit host.
+func newDockerClientWithHost(host string) (dockerClientInterface, error) {
+	cli, err := client.NewClientWithOpts(client.WithHost(host), client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to create docker client for host %q: %w",
+			host,
+			err,
+		)
+	}
+	return &realDockerClient{cli}, nil
+}
+
 // ensureImage checks if the image exists locally and pulls it if necessary
-func ensureImage(ctx context.Context, cli dockerClientInterface, imageName string) error {
+func ensureImage(
+	ctx context.Context,
+	cli dockerClientInterface,
+	imageName string,
+	progress io.Writer,
+) error {
 	slog.InfoContext(ctx, "Checking for image", "image", imageName)
 
 	_, _, err := cli.ImageInspectWithRaw(ctx, imageName)
@@ -106,7 +127,7 @@ func ensureImage(ctx context.Context, cli dockerClientInterface, imageName strin
 	defer reader.Close()
 
 	// Pipe the pull output to the user's terminal for progress
-	if _, err := io.Copy(os.Stdout, reader); err != nil {
+	if _, err := io.Copy(progress, reader); err != nil {
 		return fmt.Errorf("failed to read image pull progress: %w", err)
 	}
 
