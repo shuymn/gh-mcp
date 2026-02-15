@@ -266,6 +266,65 @@ func TestOptionalEnvironmentVariablesNotSet(t *testing.T) {
 	}
 }
 
+func TestRunWithRunner_AutoFallsBackToPodmanCLI(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "unix:///tmp/non-existent.sock")
+
+	mock := &mockRunner{
+		authDetails: &authDetails{
+			Host:  "https://github.com",
+			Token: "test-token",
+		},
+		dockerClient: &mockDockerClient{
+			pingErr: errors.New("docker ping failed"),
+		},
+		podmanRunErr: errCaptureEnv,
+	}
+
+	err := runWithRunner(t.Context(), mock, options{engine: engineAuto})
+	if !errors.Is(err, errCaptureEnv) {
+		t.Fatalf("expected podman CLI fallback error %q, got %v", errCaptureEnv, err)
+	}
+}
+
+func TestRunWithRunner_DockerModeDoesNotFallback(t *testing.T) {
+	mock := &mockRunner{
+		authDetails: &authDetails{
+			Host:  "https://github.com",
+			Token: "test-token",
+		},
+		dockerClient: &mockDockerClient{
+			pingErr: errors.New("docker ping failed"),
+		},
+		podmanRunErr: errCaptureEnv,
+	}
+
+	err := runWithRunner(t.Context(), mock, options{engine: engineDocker})
+	if !errors.Is(err, ErrDockerUnavailable) {
+		t.Fatalf("expected docker unavailable error, got %v", err)
+	}
+	if errors.Is(err, errCaptureEnv) {
+		t.Fatalf("unexpected podman fallback execution: %v", err)
+	}
+}
+
+func TestRunWithRunner_PodmanModeFallsBackToCLI(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "unix:///tmp/non-existent.sock")
+
+	mock := &mockRunner{
+		authDetails: &authDetails{
+			Host:  "https://github.com",
+			Token: "test-token",
+		},
+		dockerClientErr: errors.New("socket not reachable"),
+		podmanRunErr:    errCaptureEnv,
+	}
+
+	err := runWithRunner(t.Context(), mock, options{engine: enginePodman})
+	if !errors.Is(err, errCaptureEnv) {
+		t.Fatalf("expected podman CLI fallback error %q, got %v", errCaptureEnv, err)
+	}
+}
+
 func TestParseLogLevel(t *testing.T) {
 	tests := []struct {
 		name     string

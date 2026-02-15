@@ -219,7 +219,7 @@ func runServerContainer(
 	if err := cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
-	slog.InfoContext(ctx, "🚀 Starting github-mcp-server in Docker. Press Ctrl+C to exit.")
+	slog.InfoContext(ctx, "🚀 Starting github-mcp-server in container engine. Press Ctrl+C to exit.")
 
 	// 5. Wait for the container to exit
 	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)

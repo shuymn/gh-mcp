@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -46,6 +47,9 @@ func mainRun() int {
 
 	opts, err := parseOptions(os.Args[1:])
 	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		// flag.FlagSet will have already written details to stderr (via fs.SetOutput)
 		return 2
 	}

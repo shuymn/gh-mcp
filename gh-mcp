@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="${SCRIPT_DIR}/.gh-mcp-bin"
-BIN_PATH="${BIN_DIR}/gh-mcp"
+BIN_PATH="${BIN_DIR}/gh-mcp-real"
 
 needs_build=0
 if [[ ! -x "${BIN_PATH}" ]]; then

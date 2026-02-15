@@ -47,3 +47,20 @@ func TestParseOptionsPrecedence(t *testing.T) {
 	}
 }
 
+func TestParseOptions_DefaultFromEnv(t *testing.T) {
+	t.Setenv("GH_MCP_ENGINE", "podman")
+	opts, err := parseOptions(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if opts.engine != enginePodman {
+		t.Fatalf("engine=%q, want %q", opts.engine, enginePodman)
+	}
+}
+
+func TestParseOptions_InvalidEngine(t *testing.T) {
+	_, err := parseOptions([]string{"--engine=invalid"})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
