@@ -4,16 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 )
 
 var (
 	// ErrPodmanSocketUnavailable indicates no reachable Podman docker-API socket was found.
 	ErrPodmanSocketUnavailable = errors.New("podman socket unavailable")
+	// ErrPodmanUnavailable indicates the podman CLI is not available.
+	ErrPodmanUnavailable = errors.New("podman unavailable")
 )
 
 type dockerClientFactory interface {
@@ -129,3 +134,140 @@ func newPodmanDockerClient(ctx context.Context, f dockerClientFactory) (dockerCl
 	return nil, "", ErrPodmanSocketUnavailable
 }
 
+func podmanEnsureImageCLI(ctx context.Context, imageName string, streams *ioStreams) error {
+	_, err := podmanPath()
+	if err != nil {
+		return err
+	}
+
+	exists, err := podmanImageExists(ctx, imageName)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+
+	cmd := exec.CommandContext(ctx, "podman", "pull", imageName)
+	cmd.Stdin = nil
+	cmd.Stdout = streams.err
+	cmd.Stderr = streams.err
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("podman pull failed: %w", err)
+	}
+	return nil
+}
+
+func podmanRunCLI(ctx context.Context, env []string, imageName string, streams *ioStreams) error {
+	_, err := podmanPath()
+	if err != nil {
+		return err
+	}
+
+	containerName := podmanContainerName()
+	ctxRun, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	pr, pw := io.Pipe()
+	stdinClosed := make(chan struct{})
+	go func() {
+		_, err := io.Copy(pw, streams.in)
+		_ = pw.CloseWithError(err)
+		close(stdinClosed)
+	}()
+	go func() {
+		select {
+		case <-stdinClosed:
+			cancel()
+		case <-ctx.Done():
+			cancel()
+		}
+	}()
+
+	args, cmdEnv, err := buildPodmanRunArgs(env, imageName, containerName)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.CommandContext(ctxRun, "podman", args...)
+	cmd.Stdin = pr
+	cmd.Stdout = streams.out
+	cmd.Stderr = streams.err
+	cmd.Env = append(os.Environ(), cmdEnv...)
+
+	defer func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		_ = exec.CommandContext(cleanupCtx, "podman", "rm", "-f", containerName).Run()
+	}()
+
+	err = cmd.Run()
+	_ = pr.Close()
+
+	if err == nil {
+		return nil
+	}
+
+	if ctxRun.Err() != nil || errors.Is(err, context.Canceled) {
+		return nil
+	}
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return fmt.Errorf("%w: %d", ErrContainerNonZeroExit, exitErr.ExitCode())
+	}
+	return fmt.Errorf("podman run failed: %w", err)
+}
+
+func podmanPath() (string, error) {
+	path, err := exec.LookPath("podman")
+	if err != nil {
+		return "", ErrPodmanUnavailable
+	}
+	return path, nil
+}
+
+func podmanImageExists(ctx context.Context, imageName string) (bool, error) {
+	cmd := exec.CommandContext(ctx, "podman", "image", "exists", imageName)
+	cmd.Stdin = nil
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	err := cmd.Run()
+	if err == nil {
+		return true, nil
+	}
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, fmt.Errorf("podman image exists failed: %w", err)
+}
+
+func podmanContainerName() string {
+	return fmt.Sprintf("gh-mcp-%d-%d", os.Getpid(), time.Now().Unix())
+}
+
+func buildPodmanRunArgs(env []string, imageName, containerName string) ([]string, []string, error) {
+	args := []string{
+		"run",
+		"--rm",
+		"-i",
+		"--name",
+		containerName,
+		"--pull=never",
+	}
+
+	var cmdEnv []string
+	for _, e := range env {
+		key, value, ok := strings.Cut(e, "=")
+		if !ok || key == "" {
+			return nil, nil, fmt.Errorf("invalid env entry %q", e)
+		}
+		args = append(args, "--env", key)
+		cmdEnv = append(cmdEnv, key+"="+value)
+	}
+
+	args = append(args, imageName, "stdio")
+	return args, cmdEnv, nil
+}

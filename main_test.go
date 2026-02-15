@@ -30,6 +30,8 @@ type mockRunner struct {
 	dockerClientErr error
 	ensureImageErr  error
 	runContainerErr error
+	podmanEnsureErr error
+	podmanRunErr    error
 	capturedEnv     []string // To capture env vars passed to runContainer
 }
 
@@ -52,6 +54,14 @@ func (m *mockRunner) ensureImage(
 	_ io.Writer,
 ) error {
 	return m.ensureImageErr
+}
+
+func (m *mockRunner) podmanEnsureImageCLI(_ context.Context, _ string, _ *ioStreams) error {
+	return m.podmanEnsureErr
+}
+
+func (m *mockRunner) podmanRunCLI(_ context.Context, _ []string, _ string, _ *ioStreams) error {
+	return m.podmanRunErr
 }
 
 func (m *mockRunner) runContainer(

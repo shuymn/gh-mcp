@@ -77,3 +77,46 @@ func TestNewPodmanDockerClient_TriesEnvThenSocket(t *testing.T) {
 	}
 }
 
+func TestBuildPodmanRunArgs_SecretsNotInArgs(t *testing.T) {
+	secret := "super-secret-token"
+	env := []string{
+		"GITHUB_PERSONAL_ACCESS_TOKEN=" + secret,
+		"GITHUB_HOST=https://github.com",
+	}
+
+	args, cmdEnv, err := buildPodmanRunArgs(env, "ghcr.io/example/image:latest", "test-container")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, a := range args {
+		if a == secret || (len(a) > 0 && a == "GITHUB_PERSONAL_ACCESS_TOKEN="+secret) {
+			t.Fatalf("secret leaked into args: %v", args)
+		}
+		if a == "GITHUB_PERSONAL_ACCESS_TOKEN="+secret {
+			t.Fatalf("secret leaked into args: %v", args)
+		}
+	}
+
+	foundKeyOnly := false
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == "--env" && args[i+1] == "GITHUB_PERSONAL_ACCESS_TOKEN" {
+			foundKeyOnly = true
+			break
+		}
+	}
+	if !foundKeyOnly {
+		t.Fatalf("expected --env GITHUB_PERSONAL_ACCESS_TOKEN in args: %v", args)
+	}
+
+	foundEnv := false
+	for _, e := range cmdEnv {
+		if e == "GITHUB_PERSONAL_ACCESS_TOKEN="+secret {
+			foundEnv = true
+			break
+		}
+	}
+	if !foundEnv {
+		t.Fatalf("expected secret to be present only in cmd env, got %v", cmdEnv)
+	}
+}

@@ -63,6 +63,8 @@ type runner interface {
 	newDockerClient() (dockerClientInterface, error)
 	newDockerClientWithHost(host string) (dockerClientInterface, error)
 	ensureImage(ctx context.Context, cli dockerClientInterface, imageName string, progress io.Writer) error
+	podmanEnsureImageCLI(ctx context.Context, imageName string, streams *ioStreams) error
+	podmanRunCLI(ctx context.Context, env []string, imageName string, streams *ioStreams) error
 	runContainer(
 		ctx context.Context,
 		cli dockerClientInterface,
@@ -103,6 +105,19 @@ func (r *realRunner) ensureImage(
 	progress io.Writer,
 ) error {
 	return ensureImage(ctx, cli, imageName, progress)
+}
+
+func (r *realRunner) podmanEnsureImageCLI(ctx context.Context, imageName string, streams *ioStreams) error {
+	return podmanEnsureImageCLI(ctx, imageName, streams)
+}
+
+func (r *realRunner) podmanRunCLI(
+	ctx context.Context,
+	env []string,
+	imageName string,
+	streams *ioStreams,
+) error {
+	return podmanRunCLI(ctx, env, imageName, streams)
 }
 
 func (r *realRunner) runContainer(
@@ -156,14 +171,14 @@ func runWithRunner(ctx context.Context, r runner, opts options) error {
 			return err
 		}
 	case enginePodman:
-		if err := runPodmanSocket(ctx, r, env, mcpImage, streams); err != nil {
+		if err := runPodman(ctx, r, env, mcpImage, streams); err != nil {
 			return err
 		}
 	case engineAuto:
 		if err := runDocker(ctx, r, env, mcpImage, streams); err != nil {
 			if errors.Is(err, ErrDockerUnavailable) {
 				slog.WarnContext(ctx, "Docker unavailable, falling back to Podman")
-				return runPodmanSocket(ctx, r, env, mcpImage, streams)
+				return runPodman(ctx, r, env, mcpImage, streams)
 			}
 			return err
 		}
@@ -227,4 +242,26 @@ func runPodmanSocket(
 
 	slog.InfoContext(ctx, "✅ Ready! Starting MCP server...")
 	return r.runContainer(ctx, cli, env, imageName, streams)
+}
+
+func runPodman(
+	ctx context.Context,
+	r runner,
+	env []string,
+	imageName string,
+	streams *ioStreams,
+) error {
+	err := runPodmanSocket(ctx, r, env, imageName, streams)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, ErrPodmanSocketUnavailable) {
+		return err
+	}
+
+	slog.WarnContext(ctx, "Podman socket unavailable, falling back to podman CLI")
+	if err := r.podmanEnsureImageCLI(ctx, imageName, streams); err != nil {
+		return err
+	}
+	return r.podmanRunCLI(ctx, env, imageName, streams)
 }
