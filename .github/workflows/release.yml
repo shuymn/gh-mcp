@@ -3,6 +3,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v1.2.3). Optional when dispatching from a tag ref."
+        required: false
+        type: string
 permissions:
   contents: write
   id-token: write
@@ -22,16 +28,16 @@ jobs:
         run: |
           set -e
 
-          if [[ ${GITHUB_REF} = refs/tags/* ]]; then
+          if [[ -n "${{ github.event.inputs.tag || '' }}" ]]; then
+            tag="${{ github.event.inputs.tag }}"
+          elif [[ ${GITHUB_REF} = refs/tags/* ]]; then
             tag="${GITHUB_REF#refs/tags/}"
           else
             tag="$(git describe --tags --abbrev=0)"
           fi
 
-          is_draft=$(gh release view "$tag" --json isDraft -q '.isDraft' || echo "false")
-          if [[ ${is_draft} != "true" ]]; then
-            echo "Release $tag is not a draft or does not exist. Exiting."
-            exit 1
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "$tag" --notes "Automated release for $tag"
           fi
 
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
@@ -41,19 +47,3 @@ jobs:
           generate_attestations: true
           go_version_file: go.mod
           release_tag: ${{ steps.determine_release_tag.outputs.tag }}
-
-      - name: Publish draft release if exists
-        env:
-          RELEASE_TAG: ${{ steps.determine_release_tag.outputs.tag }}
-          GH_PAGER: cat
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -e
-
-          is_draft=$(gh release view "$RELEASE_TAG" --json isDraft -q '.isDraft' || echo "false")
-          if [[ ${is_draft} != "true" ]]; then
-            echo "No draft release found"
-          else
-            gh release edit "$RELEASE_TAG" --draft=false
-          fi
