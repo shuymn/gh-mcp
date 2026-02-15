@@ -1,6 +1,6 @@
 # gh-mcp
 
-A GitHub CLI extension that seamlessly runs the [github-mcp-server](https://github.com/github/github-mcp-server) in a Docker container using your existing `gh` authentication.
+A GitHub CLI extension that seamlessly runs the [github-mcp-server](https://github.com/github/github-mcp-server) in a container (Docker or Podman) using your existing `gh` authentication.
 
 ## Overview
 
@@ -9,7 +9,9 @@ A GitHub CLI extension that seamlessly runs the [github-mcp-server](https://gith
 ## Prerequisites
 
 - [GitHub CLI (`gh`)](https://cli.github.com/) installed and authenticated (`gh auth login`)
-- [Docker](https://www.docker.com/) installed and running
+- One of:
+  - [Docker](https://www.docker.com/) installed and running, or
+  - [Podman](https://podman.io/) installed (on macOS/Windows: `podman machine start`)
 
 ## Installation
 
@@ -79,7 +81,7 @@ gh mcp
 
 This will:
 1. 🔐 Retrieve your GitHub credentials from `gh` CLI
-2. 🐳 Connect to Docker
+2. 🐳🦭 Select a container engine (Docker or Podman)
 3. 📦 Pull the MCP server image (if not already present)
 4. 🚀 Start the MCP server with your credentials
 5. Stream I/O between your terminal and the container
@@ -89,6 +91,22 @@ Press `Ctrl+C` to gracefully shut down the server.
 ## Configuration
 
 The extension passes through several environment variables to configure the MCP server:
+
+### Container Engine
+By default, `gh mcp` uses `--engine=auto`: it tries Docker first, and if Docker is unavailable it falls back to Podman.
+
+You can override this with a flag or environment variable:
+
+```bash
+# Force Podman
+gh mcp --engine=podman
+
+# Force Docker
+gh mcp --engine=docker
+
+# Or via environment variable
+GH_MCP_ENGINE=podman gh mcp
+```
 
 ### Toolsets
 Control which GitHub API toolsets are available:
@@ -136,6 +154,15 @@ Run `gh auth login` to authenticate with GitHub first.
 
 ### "Docker daemon is not running"
 Make sure Docker Desktop (or Docker service) is running on your system.
+
+### "Podman socket unavailable"
+If the Podman docker-compatible socket/API is not reachable, `gh mcp` falls back to the Podman CLI automatically.
+
+On macOS/Windows, make sure the VM is running:
+
+```bash
+podman machine start
+```
 
 ### "Failed to pull image"
 - Check your internet connection

@@ -7,7 +7,7 @@ Thank you for your interest in contributing to gh-mcp!
 ### Prerequisites
 
 - Go 1.21 or later
-- Docker (for testing)
+- Docker or Podman (for testing)
 - Task (optional, for using Taskfile commands)
 
 ### Building from Source

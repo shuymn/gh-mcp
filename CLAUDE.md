@@ -74,9 +74,13 @@ The project consists of three main components:
    - Manages bidirectional I/O streaming between terminal and container
    - Handles graceful shutdown and cleanup
 
-3. **Main Orchestration (`main.go`)**:
+3. **Podman Support (`podman.go`)**:
+   - Prefers a docker-compatible Podman socket/API and reuses the Docker code path
+   - Falls back to the `podman` CLI if no socket is reachable
+
+4. **Main Orchestration (`main.go`)**:
    - Sets up signal handling for Ctrl+C
-   - Coordinates the authentication and Docker flow
+   - Coordinates the authentication and container engine selection (Docker/Podman)
    - Provides user feedback with emoji status messages
    - Uses dependency injection for testing
 
