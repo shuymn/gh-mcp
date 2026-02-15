@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -119,7 +120,8 @@ func run(ctx context.Context, opts options) error {
 }
 
 func runWithRunner(ctx context.Context, r runner, opts options) error {
-	_ = opts
+	streams := defaultIOStreams()
+
 	// 1. Get Auth
 	slog.InfoContext(ctx, "🔐 Retrieving GitHub credentials...")
 	auth, err := r.getAuth()
@@ -128,28 +130,6 @@ func runWithRunner(ctx context.Context, r runner, opts options) error {
 	}
 	slog.InfoContext(ctx, "✅ Authenticated", "host", auth.Host)
 
-	// 2. Init Docker client
-	slog.InfoContext(ctx, "🐳 Connecting to Docker...")
-	cli, err := r.newDockerClient()
-	if err != nil {
-		return err
-	}
-	defer cli.Close()
-
-	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	if _, err := cli.Ping(pingCtx); err != nil {
-		return fmt.Errorf("%w: %w", ErrDockerUnavailable, err)
-	}
-	slog.InfoContext(ctx, "✅ Docker client connected")
-
-	// 3. Ensure image exists
-	slog.InfoContext(ctx, "📦 Checking for MCP server image...")
-	if err := r.ensureImage(ctx, cli, mcpImage, defaultIOStreams().err); err != nil {
-		return err
-	}
-
-	// 4. Prepare environment
 	env := []string{
 		"GITHUB_PERSONAL_ACCESS_TOKEN=" + auth.Token,
 		"GITHUB_HOST=" + auth.Host,
@@ -170,12 +150,81 @@ func runWithRunner(ctx context.Context, r runner, opts options) error {
 		}
 	}
 
-	// 5. Run the container and stream I/O
-	slog.InfoContext(ctx, "✅ Ready! Starting MCP server...")
-	if err := r.runContainer(ctx, cli, env, mcpImage, defaultIOStreams()); err != nil {
-		return err
+	switch opts.engine {
+	case engineDocker:
+		if err := runDocker(ctx, r, env, mcpImage, streams); err != nil {
+			return err
+		}
+	case enginePodman:
+		if err := runPodmanSocket(ctx, r, env, mcpImage, streams); err != nil {
+			return err
+		}
+	case engineAuto:
+		if err := runDocker(ctx, r, env, mcpImage, streams); err != nil {
+			if errors.Is(err, ErrDockerUnavailable) {
+				slog.WarnContext(ctx, "Docker unavailable, falling back to Podman")
+				return runPodmanSocket(ctx, r, env, mcpImage, streams)
+			}
+			return err
+		}
+	default:
+		return fmt.Errorf("unknown engine: %q", opts.engine)
 	}
 
 	slog.InfoContext(ctx, "👋 Session ended.")
 	return nil
+}
+
+func runDocker(
+	ctx context.Context,
+	r runner,
+	env []string,
+	imageName string,
+	streams *ioStreams,
+) error {
+	slog.InfoContext(ctx, "🐳 Connecting to Docker...")
+	cli, err := r.newDockerClient()
+	if err != nil {
+		return err
+	}
+	defer cli.Close()
+
+	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if _, err := cli.Ping(pingCtx); err != nil {
+		return fmt.Errorf("%w: %w", ErrDockerUnavailable, err)
+	}
+	slog.InfoContext(ctx, "✅ Docker client connected")
+
+	slog.InfoContext(ctx, "📦 Checking for MCP server image...")
+	if err := r.ensureImage(ctx, cli, imageName, streams.err); err != nil {
+		return err
+	}
+
+	slog.InfoContext(ctx, "✅ Ready! Starting MCP server...")
+	return r.runContainer(ctx, cli, env, imageName, streams)
+}
+
+func runPodmanSocket(
+	ctx context.Context,
+	r runner,
+	env []string,
+	imageName string,
+	streams *ioStreams,
+) error {
+	slog.InfoContext(ctx, "🦭 Connecting to Podman (socket)...")
+	cli, host, err := newPodmanDockerClient(ctx, r)
+	if err != nil {
+		return err
+	}
+	defer cli.Close()
+
+	slog.InfoContext(ctx, "✅ Podman docker API reachable", "host", host)
+	slog.InfoContext(ctx, "📦 Checking for MCP server image...")
+	if err := r.ensureImage(ctx, cli, imageName, streams.err); err != nil {
+		return err
+	}
+
+	slog.InfoContext(ctx, "✅ Ready! Starting MCP server...")
+	return r.runContainer(ctx, cli, env, imageName, streams)
 }
