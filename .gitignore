@@ -1,7 +1,7 @@
-/gh-mcp
 /gh-mcp.exe
 /coverage.out
 /.DS_Store
 /.gemini/
 /.claude/
 /bin/
+/.gh-mcp-bin/

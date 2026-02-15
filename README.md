@@ -19,6 +19,8 @@ A GitHub CLI extension that seamlessly runs the [github-mcp-server](https://gith
 gh extension install shuymn/gh-mcp
 ```
 
+If you install from a fork without release artifacts, the repository includes an executable `gh-mcp` bootstrap script so `gh extension install <owner>/gh-mcp` still works. In that mode, `go` must be available on `PATH` to build the extension binary locally.
+
 ### Updating
 
 To update the extension to the latest version:
