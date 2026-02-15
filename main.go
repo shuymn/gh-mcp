@@ -40,6 +40,13 @@ func mainRun() int {
 	}))
 	slog.SetDefault(logger)
 
+	opts, err := parseOptions(os.Args[1:])
+	if err != nil {
+		// flag.FlagSet will have already written details to stderr (via fs.SetOutput)
+		return 2
+	}
+	_ = opts
+
 	if err := run(ctx); err != nil {
 		slog.ErrorContext(ctx, "Error", "err", err)
 		return 1
