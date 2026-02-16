@@ -108,6 +108,10 @@ func waitForServerExit(ctx context.Context, cmd *exec.Cmd) error {
 
 	select {
 	case err := <-waitCh:
+		// Prefer clean shutdown semantics if the caller has already canceled.
+		if ctx.Err() != nil {
+			return nil
+		}
 		return normalizeServerExit(err)
 	case <-ctx.Done():
 		stopServerProcess(cmd, waitCh)
@@ -116,13 +120,14 @@ func waitForServerExit(ctx context.Context, cmd *exec.Cmd) error {
 }
 
 func stopServerProcess(cmd *exec.Cmd, waitCh <-chan error) {
-	if cmd.Process == nil {
+	proc := cmd.Process
+	if proc == nil {
 		return
 	}
 
 	// Prefer graceful interrupt on Unix, then force-kill after timeout.
 	if runtime.GOOS != "windows" {
-		_ = cmd.Process.Signal(os.Interrupt)
+		_ = proc.Signal(os.Interrupt)
 		select {
 		case <-waitCh:
 			return
@@ -130,7 +135,7 @@ func stopServerProcess(cmd *exec.Cmd, waitCh <-chan error) {
 		}
 	}
 
-	_ = cmd.Process.Kill()
+	_ = proc.Kill()
 	<-waitCh
 }
 
@@ -342,18 +347,18 @@ func extractZipExecutable(archive []byte, executableName, outputPath string) err
 
 		file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o700)
 		if err != nil {
-			readCloser.Close()
+			_ = readCloser.Close()
 			return fmt.Errorf("failed to create extracted binary: %w", err)
 		}
 
 		if err := copyBundledExecutableWithLimit(file, readCloser, executableName); err != nil {
-			file.Close()
-			readCloser.Close()
+			_ = file.Close()
+			_ = readCloser.Close()
 			return err
 		}
 
 		if err := file.Close(); err != nil {
-			readCloser.Close()
+			_ = readCloser.Close()
 			return fmt.Errorf("failed to close extracted binary: %w", err)
 		}
 		if err := readCloser.Close(); err != nil {

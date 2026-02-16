@@ -5,15 +5,19 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestVerifyBundledArchiveChecksum(t *testing.T) {
@@ -301,6 +305,122 @@ func TestBundledServerTempParentDirs(t *testing.T) {
 	}
 }
 
+func TestWaitForServerExit(t *testing.T) {
+	t.Run("normal exit", func(t *testing.T) {
+		cmd := newServerTestHelperCommand(t, "exit-0")
+		if err := cmd.Start(); err != nil {
+			t.Fatalf("failed to start helper process: %v", err)
+		}
+
+		if err := waitForServerExit(context.Background(), cmd); err != nil {
+			t.Fatalf("waitForServerExit returned error: %v", err)
+		}
+	})
+
+	t.Run("non-zero exit", func(t *testing.T) {
+		cmd := newServerTestHelperCommand(t, "exit-9")
+		if err := cmd.Start(); err != nil {
+			t.Fatalf("failed to start helper process: %v", err)
+		}
+
+		err := waitForServerExit(context.Background(), cmd)
+		if err == nil {
+			t.Fatal("expected waitForServerExit to return non-zero exit error")
+		}
+		if !errors.Is(err, ErrServerNonZeroExit) {
+			t.Fatalf("expected ErrServerNonZeroExit, got: %v", err)
+		}
+		if !strings.Contains(err.Error(), ": 9") {
+			t.Fatalf("expected exit code 9 in error, got: %v", err)
+		}
+	})
+
+	t.Run("context cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cmd := newServerTestHelperCommand(t, "sleep")
+		if err := cmd.Start(); err != nil {
+			cancel()
+			t.Fatalf("failed to start helper process: %v", err)
+		}
+
+		cancel()
+		if err := waitForServerExit(ctx, cmd); err != nil {
+			t.Fatalf("expected nil error on canceled context, got: %v", err)
+		}
+	})
+}
+
+func TestWaitForServerExitCanceledContextSuppressesExitError(t *testing.T) {
+	for i := 0; i < 24; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		cmd := newServerTestHelperCommand(t, "sleep-then-exit-5")
+		if err := cmd.Start(); err != nil {
+			cancel()
+			t.Fatalf("failed to start helper process at iteration %d: %v", i, err)
+		}
+
+		cancel()
+		time.Sleep(20 * time.Millisecond)
+
+		if err := waitForServerExit(ctx, cmd); err != nil {
+			t.Fatalf("expected nil error at iteration %d, got: %v", i, err)
+		}
+	}
+}
+
+func TestStopServerProcess(t *testing.T) {
+	t.Run("nil process", func(t *testing.T) {
+		stopServerProcess(exec.Command("definitely-not-started"), make(chan error))
+	})
+
+	t.Run("running process", func(t *testing.T) {
+		cmd := newServerTestHelperCommand(t, "sleep")
+		if err := cmd.Start(); err != nil {
+			t.Fatalf("failed to start helper process: %v", err)
+		}
+
+		waitCh := make(chan error, 1)
+		go func() {
+			waitCh <- cmd.Wait()
+		}()
+
+		stopServerProcess(cmd, waitCh)
+
+		if cmd.ProcessState == nil {
+			t.Fatal("expected process state after stopServerProcess")
+		}
+	})
+}
+
+func TestNormalizeServerExit(t *testing.T) {
+	if err := normalizeServerExit(nil); err != nil {
+		t.Fatalf("expected nil error for nil input, got: %v", err)
+	}
+
+	cmd := newServerTestHelperCommand(t, "exit-7")
+	err := cmd.Run()
+	if err == nil {
+		t.Fatal("expected helper process to exit non-zero")
+	}
+
+	normalized := normalizeServerExit(err)
+	if !errors.Is(normalized, ErrServerNonZeroExit) {
+		t.Fatalf("expected ErrServerNonZeroExit, got: %v", normalized)
+	}
+	if !strings.Contains(normalized.Error(), ": 7") {
+		t.Fatalf("expected exit code 7 in normalized error, got: %v", normalized)
+	}
+
+	waitErr := errors.New("wait failed")
+	normalized = normalizeServerExit(waitErr)
+	if normalized == nil {
+		t.Fatal("expected wrapped wait error, got nil")
+	}
+	if !strings.Contains(normalized.Error(), "failed waiting for github-mcp-server process") {
+		t.Fatalf("unexpected wrapped error: %v", normalized)
+	}
+}
+
 func buildTarGzArchive(t *testing.T, files map[string]string) []byte {
 	t.Helper()
 
@@ -377,4 +497,44 @@ func (repeatByteReader) Read(p []byte) (int, error) {
 		p[i] = 'x'
 	}
 	return len(p), nil
+}
+
+func newServerTestHelperCommand(t *testing.T, mode string) *exec.Cmd {
+	t.Helper()
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestServerProcessHelper", "--", mode)
+	cmd.Env = append(os.Environ(), "GO_WANT_SERVER_PROCESS_HELPER=1")
+
+	return cmd
+}
+
+func TestServerProcessHelper(*testing.T) {
+	if os.Getenv("GO_WANT_SERVER_PROCESS_HELPER") != "1" {
+		return
+	}
+
+	mode := ""
+	for i, arg := range os.Args {
+		if arg == "--" && i+1 < len(os.Args) {
+			mode = os.Args[i+1]
+			break
+		}
+	}
+
+	switch mode {
+	case "exit-0":
+		os.Exit(0)
+	case "exit-7":
+		os.Exit(7)
+	case "exit-9":
+		os.Exit(9)
+	case "sleep":
+		time.Sleep(30 * time.Second)
+		os.Exit(0)
+	case "sleep-then-exit-5":
+		time.Sleep(10 * time.Millisecond)
+		os.Exit(5)
+	default:
+		os.Exit(2)
+	}
 }
