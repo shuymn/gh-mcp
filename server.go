@@ -95,11 +95,11 @@ func runBundledServer(ctx context.Context, env []string, streams *ioStreams) err
 	cmd.Stderr = streams.err
 	cmd.Env = buildChildProcessEnv(env)
 
+	slog.InfoContext(ctx, "🚀 Starting bundled github-mcp-server", "version", mcpServerVersion)
+
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start bundled github-mcp-server: %w", err)
 	}
-
-	slog.InfoContext(ctx, "🚀 Starting bundled github-mcp-server", "version", mcpServerVersion)
 
 	if err := waitForServerExit(ctx, cmd); err != nil {
 		return err
