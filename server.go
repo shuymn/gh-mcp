@@ -47,8 +47,6 @@ const (
 	maxBundledExecutableBytes int64 = 64 << 20 // 64 MiB
 	// Wait this long after SIGINT before force-killing the bundled server process.
 	serverGracefulShutdownTimeout = 3 * time.Second
-	// Reserve capacity for cache-dir candidate and system-temp fallback candidate.
-	bundledTempParentDirCapacity = 2
 )
 
 var allowedParentEnvKeys = []string{
@@ -212,7 +210,7 @@ func materializeBundledServerBinary() (string, func(), error) {
 }
 
 func bundledServerTempParentDirs() []string {
-	parentDirs := make([]string, 0, bundledTempParentDirCapacity)
+	var parentDirs []string
 
 	if cacheDir, err := os.UserCacheDir(); err == nil && cacheDir != "" {
 		parentDirs = append(parentDirs, filepath.Join(cacheDir, "gh-mcp"))
