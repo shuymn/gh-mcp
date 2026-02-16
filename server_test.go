@@ -329,9 +329,11 @@ func TestEnsureSecureTempParentDirTightensPermissions(t *testing.T) {
 		t.Fatalf("failed to create parent directory: %v", err)
 	}
 
-	if _, err := ensureSecureTempParentDir(parent); err != nil {
+	parentState, err := ensureSecureTempParentDir(parent)
+	if err != nil {
 		t.Fatalf("ensureSecureTempParentDir returned error: %v", err)
 	}
+	defer parentState.close()
 
 	info, err := os.Stat(parent)
 	if err != nil {
@@ -345,19 +347,21 @@ func TestEnsureSecureTempParentDirTightensPermissions(t *testing.T) {
 func TestVerifyTempParentDirUnchangedDetectsReplacement(t *testing.T) {
 	parent := filepath.Join(t.TempDir(), "cache")
 
-	info, err := ensureSecureTempParentDir(parent)
+	parentState, err := ensureSecureTempParentDir(parent)
 	if err != nil {
 		t.Fatalf("ensureSecureTempParentDir returned error: %v", err)
 	}
+	defer parentState.close()
 
-	if err := os.Remove(parent); err != nil {
-		t.Fatalf("failed to remove parent directory: %v", err)
+	oldParent := filepath.Join(filepath.Dir(parent), "cache-old")
+	if err := os.Rename(parent, oldParent); err != nil {
+		t.Fatalf("failed to move original parent directory: %v", err)
 	}
 	if err := os.Mkdir(parent, 0o700); err != nil {
 		t.Fatalf("failed to recreate parent directory: %v", err)
 	}
 
-	err = verifyTempParentDirUnchanged(parent, info)
+	err = verifyTempParentDirUnchanged(parent, parentState)
 	if err == nil {
 		t.Fatal("expected parent replacement to be detected")
 	}

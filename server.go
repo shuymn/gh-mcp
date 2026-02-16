@@ -226,6 +226,19 @@ func bundledServerTempParentDirs() []string {
 	return parentDirs
 }
 
+type tempParentDirState struct {
+	info   os.FileInfo
+	handle *os.File
+}
+
+func (s *tempParentDirState) close() {
+	if s == nil || s.handle == nil {
+		return
+	}
+
+	_ = s.handle.Close()
+}
+
 func createTempDirWithFallback(parentDirs []string) (string, error) {
 	if len(parentDirs) == 0 {
 		parentDirs = []string{""}
@@ -245,14 +258,15 @@ func createTempDirWithFallback(parentDirs []string) (string, error) {
 }
 
 func createTempDir(parentDir string) (string, error) {
-	var parentInfo os.FileInfo
+	var parentState *tempParentDirState
 	var err error
 
 	if parentDir != "" {
-		parentInfo, err = ensureSecureTempParentDir(parentDir)
+		parentState, err = ensureSecureTempParentDir(parentDir)
 		if err != nil {
 			return "", err
 		}
+		defer parentState.close()
 	}
 
 	tmpDir, err := os.MkdirTemp(parentDir, "gh-mcp-server-*")
@@ -263,7 +277,7 @@ func createTempDir(parentDir string) (string, error) {
 		return "", fmt.Errorf("failed to create temporary directory in %q: %w", parentDir, err)
 	}
 	if parentDir != "" {
-		if err := verifyTempParentDirUnchanged(parentDir, parentInfo); err != nil {
+		if err := verifyTempParentDirUnchanged(parentDir, parentState); err != nil {
 			_ = os.RemoveAll(tmpDir)
 			return "", err
 		}
@@ -272,7 +286,7 @@ func createTempDir(parentDir string) (string, error) {
 	return tmpDir, nil
 }
 
-func ensureSecureTempParentDir(parentDir string) (os.FileInfo, error) {
+func ensureSecureTempParentDir(parentDir string) (*tempParentDirState, error) {
 	if err := os.MkdirAll(parentDir, 0o700); err != nil {
 		return nil, fmt.Errorf("failed to create parent directory %q: %w", parentDir, err)
 	}
@@ -285,11 +299,53 @@ func ensureSecureTempParentDir(parentDir string) (os.FileInfo, error) {
 		return nil, err
 	}
 
-	if runtime.GOOS == "windows" {
-		return info, nil
+	if runtime.GOOS != "windows" {
+		info, err = ensureSecureUnixTempParentDir(parentDir, info)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return ensureSecureUnixTempParentDir(parentDir, info)
+	state := &tempParentDirState{info: info}
+	if runtime.GOOS == "windows" {
+		return state, nil
+	}
+
+	handle, err := os.Open(parentDir)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to open parent directory %q for verification: %w",
+			parentDir,
+			err,
+		)
+	}
+
+	handleInfo, err := handle.Stat()
+	if err != nil {
+		_ = handle.Close()
+		return nil, fmt.Errorf(
+			"failed to stat opened parent directory %q: %w",
+			parentDir,
+			err,
+		)
+	}
+	if err := validateTempParentDirInfo(parentDir, handleInfo); err != nil {
+		_ = handle.Close()
+		return nil, err
+	}
+	if !os.SameFile(info, handleInfo) {
+		_ = handle.Close()
+		return nil, fmt.Errorf(
+			"%w: parent directory %q changed while preparing temporary directory",
+			ErrBundledTempParentInsecure,
+			parentDir,
+		)
+	}
+
+	state.info = handleInfo
+	state.handle = handle
+
+	return state, nil
 }
 
 func ensureSecureUnixTempParentDir(parentDir string, info os.FileInfo) (os.FileInfo, error) {
@@ -389,7 +445,11 @@ func fileInfoUID(info os.FileInfo) (int, bool) {
 	return 0, false
 }
 
-func verifyTempParentDirUnchanged(parentDir string, expected os.FileInfo) error {
+func verifyTempParentDirUnchanged(parentDir string, expected *tempParentDirState) error {
+	if expected == nil || expected.info == nil {
+		return fmt.Errorf("missing expected parent directory state for %q", parentDir)
+	}
+
 	current, err := os.Lstat(parentDir)
 	if err != nil {
 		return fmt.Errorf("failed to re-check parent directory %q: %w", parentDir, err)
@@ -397,7 +457,20 @@ func verifyTempParentDirUnchanged(parentDir string, expected os.FileInfo) error 
 	if err := validateTempParentDirInfo(parentDir, current); err != nil {
 		return err
 	}
-	if !os.SameFile(expected, current) {
+
+	baseline := expected.info
+	if expected.handle != nil {
+		baseline, err = expected.handle.Stat()
+		if err != nil {
+			return fmt.Errorf(
+				"failed to stat opened parent directory %q during verification: %w",
+				parentDir,
+				err,
+			)
+		}
+	}
+
+	if !os.SameFile(baseline, current) {
 		return fmt.Errorf(
 			"%w: parent directory %q changed while creating temporary directory",
 			ErrBundledTempParentInsecure,
