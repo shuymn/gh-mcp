@@ -18,6 +18,13 @@ linters:
     - contextcheck
     - wsl_v5
     - noinlineerr
+    - gochecknoglobals
+    - goconst
+  settings:
+    mnd:
+      ignored-numbers:
+        - "0o700"
+        - "0o755"
   exclusions:
     warn-unused: true
     presets:
