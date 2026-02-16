@@ -2,11 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+)
+
+var (
+	// ErrInvalidServerEnvValue is returned when an environment value is unsafe for process execution.
+	ErrInvalidServerEnvValue = errors.New("invalid server environment value")
 )
 
 func main() {
@@ -96,9 +103,14 @@ func runWithRunner(ctx context.Context, r runner) error {
 	slog.InfoContext(ctx, "📦 Preparing bundled MCP server...", "version", mcpServerVersion)
 
 	// 3. Prepare environment
-	env := []string{
-		"GITHUB_PERSONAL_ACCESS_TOKEN=" + auth.Token,
-		"GITHUB_HOST=" + auth.Host,
+	env := make([]string, 0, 2)
+	env, err = appendServerEnv(env, "GITHUB_PERSONAL_ACCESS_TOKEN", auth.Token)
+	if err != nil {
+		return err
+	}
+	env, err = appendServerEnv(env, "GITHUB_HOST", auth.Host)
+	if err != nil {
+		return err
 	}
 
 	// Pass through optional environment variables if they are set
@@ -112,7 +124,10 @@ func runWithRunner(ctx context.Context, r runner) error {
 
 	for _, envVar := range optionalEnvVars {
 		if value := os.Getenv(envVar); value != "" {
-			env = append(env, envVar+"="+value)
+			env, err = appendServerEnv(env, envVar, value)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -123,5 +138,24 @@ func runWithRunner(ctx context.Context, r runner) error {
 	}
 
 	slog.InfoContext(ctx, "👋 Session ended.")
+	return nil
+}
+
+func appendServerEnv(env []string, key, value string) ([]string, error) {
+	if err := validateServerEnvValue(key, value); err != nil {
+		return nil, err
+	}
+
+	return append(env, key+"="+value), nil
+}
+
+func validateServerEnvValue(key, value string) error {
+	if strings.ContainsRune(value, '\x00') {
+		return fmt.Errorf("%w: %s contains NUL byte", ErrInvalidServerEnvValue, key)
+	}
+	if strings.ContainsAny(value, "\r\n") {
+		return fmt.Errorf("%w: %s contains line break", ErrInvalidServerEnvValue, key)
+	}
+
 	return nil
 }

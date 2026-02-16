@@ -172,6 +172,44 @@ func TestOptionalEnvironmentVariablesNotSet(t *testing.T) {
 	}
 }
 
+func TestRunWithRunnerRejectsInvalidServerEnvValue(t *testing.T) {
+	t.Run("invalid token", func(t *testing.T) {
+		mock := &mockRunner{
+			authDetails: &authDetails{
+				Host:  "https://github.com",
+				Token: "test-token\ninvalid",
+			},
+		}
+
+		err := runWithRunner(t.Context(), mock)
+		if err == nil {
+			t.Fatal("expected error for invalid token env value")
+		}
+		if !errors.Is(err, ErrInvalidServerEnvValue) {
+			t.Fatalf("expected ErrInvalidServerEnvValue, got: %v", err)
+		}
+	})
+
+	t.Run("invalid optional env", func(t *testing.T) {
+		t.Setenv("GITHUB_TOOLSETS", "repos,issues\npull_requests")
+
+		mock := &mockRunner{
+			authDetails: &authDetails{
+				Host:  "https://github.com",
+				Token: "test-token",
+			},
+		}
+
+		err := runWithRunner(t.Context(), mock)
+		if err == nil {
+			t.Fatal("expected error for invalid optional env value")
+		}
+		if !errors.Is(err, ErrInvalidServerEnvValue) {
+			t.Fatalf("expected ErrInvalidServerEnvValue, got: %v", err)
+		}
+	})
+}
+
 func TestParseLogLevel(t *testing.T) {
 	tests := []struct {
 		name     string
