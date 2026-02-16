@@ -7,6 +7,7 @@ Thank you for your interest in contributing to gh-mcp!
 ### Prerequisites
 
 - Go 1.21 or later
+- GitHub CLI (`gh`)
 - Task (optional, for using Taskfile commands)
 
 ### Building from Source
@@ -37,6 +38,8 @@ When bumping the bundled MCP server version, refresh pinned metadata from the ta
 
 This updates `mcp_version.go` and SHA256 constants in `bundle_*.go`.
 Release archives under `bundled/` are downloaded on demand and are gitignored.
+`scripts/prepare-bundled-mcp-server.sh` and `scripts/update-bundled-mcp-server.sh` use authenticated `gh` API requests,
+so run `gh auth login` locally or set `GH_TOKEN` (or `GITHUB_TOKEN`) in CI.
 
 ## Development Workflow
 
