@@ -9,8 +9,6 @@ import (
 	"syscall"
 )
 
-const mcpImage = "ghcr.io/github/github-mcp-server@sha256:a2b5fb79b1cee851bfc3532dfe480c3dc5736974ca9d93a7a9f68e52ce4b62a0" // v0.30.3
-
 func main() {
 	os.Exit(mainRun())
 }
@@ -50,13 +48,9 @@ func mainRun() int {
 // runner interface for dependency injection
 type runner interface {
 	getAuth() (*authDetails, error)
-	newDockerClient() (dockerClientInterface, error)
-	ensureImage(ctx context.Context, cli dockerClientInterface, imageName string) error
-	runContainer(
+	runServer(
 		ctx context.Context,
-		cli dockerClientInterface,
 		env []string,
-		imageName string,
 		streams *ioStreams,
 	) error
 }
@@ -70,10 +64,6 @@ func (r *realRunner) getAuth() (*authDetails, error) {
 	return getAuthDetails(r.getAuthInterface())
 }
 
-func (r *realRunner) newDockerClient() (dockerClientInterface, error) {
-	return newDockerClient()
-}
-
 func (r *realRunner) getAuthInterface() authInterface {
 	if r.authInterface == nil {
 		r.authInterface = &realAuth{}
@@ -81,22 +71,12 @@ func (r *realRunner) getAuthInterface() authInterface {
 	return r.authInterface
 }
 
-func (r *realRunner) ensureImage(
+func (r *realRunner) runServer(
 	ctx context.Context,
-	cli dockerClientInterface,
-	imageName string,
-) error {
-	return ensureImage(ctx, cli, imageName)
-}
-
-func (r *realRunner) runContainer(
-	ctx context.Context,
-	cli dockerClientInterface,
 	env []string,
-	imageName string,
 	streams *ioStreams,
 ) error {
-	return runServerContainer(ctx, cli, env, imageName, streams)
+	return runBundledServer(ctx, env, streams)
 }
 
 func run(ctx context.Context) error {
@@ -112,22 +92,10 @@ func runWithRunner(ctx context.Context, r runner) error {
 	}
 	slog.InfoContext(ctx, "✅ Authenticated", "host", auth.Host)
 
-	// 2. Init Docker client
-	slog.InfoContext(ctx, "🐳 Connecting to Docker...")
-	cli, err := r.newDockerClient()
-	if err != nil {
-		return err
-	}
-	defer cli.Close()
-	slog.InfoContext(ctx, "✅ Docker client connected")
+	// 2. Validate bundled server version before startup.
+	slog.InfoContext(ctx, "📦 Preparing bundled MCP server...", "version", mcpServerVersion)
 
-	// 3. Ensure image exists
-	slog.InfoContext(ctx, "📦 Checking for MCP server image...")
-	if err := r.ensureImage(ctx, cli, mcpImage); err != nil {
-		return err
-	}
-
-	// 4. Prepare environment
+	// 3. Prepare environment
 	env := []string{
 		"GITHUB_PERSONAL_ACCESS_TOKEN=" + auth.Token,
 		"GITHUB_HOST=" + auth.Host,
@@ -148,9 +116,9 @@ func runWithRunner(ctx context.Context, r runner) error {
 		}
 	}
 
-	// 5. Run the container and stream I/O
+	// 4. Run the bundled server and stream I/O.
 	slog.InfoContext(ctx, "✅ Ready! Starting MCP server...")
-	if err := r.runContainer(ctx, cli, env, mcpImage, defaultIOStreams()); err != nil {
+	if err := r.runServer(ctx, env, defaultIOStreams()); err != nil {
 		return err
 	}
 
