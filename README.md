@@ -10,6 +10,21 @@ A GitHub CLI extension that seamlessly runs the [github-mcp-server](https://gith
 
 - [GitHub CLI (`gh`)](https://cli.github.com/) installed and authenticated (`gh auth login`)
 
+## Platform Support
+
+`gh-mcp` runtime support is limited to platforms where bundled `github-mcp-server` archives are available:
+
+- `darwin/amd64`
+- `darwin/arm64`
+- `linux/386`
+- `linux/amd64`
+- `linux/arm64`
+- `windows/386`
+- `windows/amd64`
+- `windows/arm64`
+
+Release assets may still include additional targets produced by `cli/gh-extension-precompile` (for example `freebsd-*` and `linux/arm`), but those targets are not supported by `gh-mcp` runtime because no bundled `github-mcp-server` binary is available for them.
+
 ## Installation
 
 ```bash
