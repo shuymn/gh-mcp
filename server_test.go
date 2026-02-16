@@ -244,7 +244,7 @@ func TestBundledChecksumConstantMatchesChecksumsFile(t *testing.T) {
 	}
 
 	var fromFile string
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
 			continue
