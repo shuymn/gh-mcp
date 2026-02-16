@@ -11,10 +11,8 @@ import (
 	"syscall"
 )
 
-var (
-	// ErrInvalidServerEnvValue is returned when an environment value is unsafe for process execution.
-	ErrInvalidServerEnvValue = errors.New("invalid server environment value")
-)
+// ErrInvalidServerEnvValue is returned when an environment value is unsafe for process execution.
+var ErrInvalidServerEnvValue = errors.New("invalid server environment value")
 
 func main() {
 	os.Exit(mainRun())

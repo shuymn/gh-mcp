@@ -351,7 +351,7 @@ func TestWaitForServerExit(t *testing.T) {
 }
 
 func TestWaitForServerExitCanceledContextSuppressesExitError(t *testing.T) {
-	for i := 0; i < 24; i++ {
+	for i := range 24 {
 		ctx, cancel := context.WithCancel(context.Background())
 		cmd := newServerTestHelperCommand(t, "sleep-then-exit-5")
 		if err := cmd.Start(); err != nil {
@@ -369,7 +369,7 @@ func TestWaitForServerExitCanceledContextSuppressesExitError(t *testing.T) {
 }
 
 func TestStopServerProcess(t *testing.T) {
-	t.Run("nil process", func(t *testing.T) {
+	t.Run("nil process", func(_ *testing.T) {
 		stopServerProcess(exec.Command("definitely-not-started"), make(chan error))
 	})
 
