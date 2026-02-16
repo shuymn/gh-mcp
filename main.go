@@ -14,8 +14,6 @@ import (
 // ErrInvalidServerEnvValue is returned when an environment value is unsafe for process execution.
 var ErrInvalidServerEnvValue = errors.New("invalid server environment value")
 
-const requiredServerEnvVarCount = 2
-
 func main() {
 	os.Exit(mainRun())
 }
@@ -103,7 +101,7 @@ func runWithRunner(ctx context.Context, r runner) error {
 	slog.InfoContext(ctx, "📦 Preparing bundled MCP server...", "version", mcpServerVersion)
 
 	// 3. Prepare environment
-	env := make([]string, 0, requiredServerEnvVarCount)
+	var env []string
 	env, err = appendServerEnv(env, "GITHUB_PERSONAL_ACCESS_TOKEN", auth.Token)
 	if err != nil {
 		return err
