@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -139,6 +140,34 @@ func TestBundledExecutableSizeValidation(t *testing.T) {
 		)
 		if err == nil {
 			t.Fatal("expected zip over-max size to fail validation")
+		}
+	})
+}
+
+func TestCopyBundledExecutableWithLimit(t *testing.T) {
+	t.Run("within limit", func(t *testing.T) {
+		if err := copyBundledExecutableWithLimit(
+			io.Discard,
+			strings.NewReader("binary-content"),
+			"github-mcp-server",
+		); err != nil {
+			t.Fatalf("expected copy to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("over limit", func(t *testing.T) {
+		reader := io.LimitReader(repeatByteReader{}, maxBundledExecutableBytes+2)
+
+		err := copyBundledExecutableWithLimit(
+			io.Discard,
+			reader,
+			"github-mcp-server",
+		)
+		if err == nil {
+			t.Fatal("expected copy to fail when payload exceeds max size")
+		}
+		if !strings.Contains(err.Error(), "exceeds extraction size limit") {
+			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 }
@@ -339,4 +368,13 @@ func envSliceToMap(t *testing.T, env []string) map[string]string {
 	}
 
 	return m
+}
+
+type repeatByteReader struct{}
+
+func (repeatByteReader) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = 'x'
+	}
+	return len(p), nil
 }

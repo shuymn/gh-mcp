@@ -270,9 +270,9 @@ func extractTarGzExecutable(archive []byte, executableName, outputPath string) e
 			return fmt.Errorf("failed to create extracted binary: %w", err)
 		}
 
-		if _, err := io.Copy(file, tarReader); err != nil {
+		if err := copyBundledExecutableWithLimit(file, tarReader, executableName); err != nil {
 			_ = file.Close()
-			return fmt.Errorf("failed to extract bundled binary: %w", err)
+			return err
 		}
 		if err := file.Close(); err != nil {
 			return fmt.Errorf("failed to close extracted binary: %w", err)
@@ -316,10 +316,10 @@ func extractZipExecutable(archive []byte, executableName, outputPath string) err
 			return fmt.Errorf("failed to create extracted binary: %w", err)
 		}
 
-		if _, err := io.Copy(file, readCloser); err != nil {
+		if err := copyBundledExecutableWithLimit(file, readCloser, executableName); err != nil {
 			file.Close()
 			readCloser.Close()
-			return fmt.Errorf("failed to extract bundled binary: %w", err)
+			return err
 		}
 
 		if err := file.Close(); err != nil {
@@ -338,6 +338,23 @@ func extractZipExecutable(archive []byte, executableName, outputPath string) err
 		executableName,
 		bundledMCPArchiveName,
 	)
+}
+
+func copyBundledExecutableWithLimit(dst io.Writer, src io.Reader, executableName string) error {
+	copied, err := io.Copy(dst, io.LimitReader(src, maxBundledExecutableBytes+1))
+	if err != nil {
+		return fmt.Errorf("failed to extract bundled binary: %w", err)
+	}
+	if copied > maxBundledExecutableBytes {
+		return fmt.Errorf(
+			"bundled executable %q exceeds extraction size limit %d bytes in %s",
+			executableName,
+			maxBundledExecutableBytes,
+			bundledMCPArchiveName,
+		)
+	}
+
+	return nil
 }
 
 func validateBundledExecutableSize(size int64, executableName string) error {
