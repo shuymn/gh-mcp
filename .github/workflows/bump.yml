@@ -104,6 +104,8 @@ jobs:
 
       - name: Refresh bundled assets
         if: steps.check-target.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           ./scripts/update-bundled-mcp-server.sh "${{ steps.version.outputs.value }}"

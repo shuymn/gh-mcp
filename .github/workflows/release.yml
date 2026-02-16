@@ -16,6 +16,8 @@ jobs:
 
       - name: Prepare bundled assets
         run: ./scripts/prepare-bundled-mcp-server.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - id: determine_release_tag
         env:
