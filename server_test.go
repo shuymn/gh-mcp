@@ -99,21 +99,37 @@ func TestExtractZipExecutableNotFound(t *testing.T) {
 	}
 }
 
-func TestMergeEnv(t *testing.T) {
-	base := []string{"A=1", "B=2"}
-	overrides := []string{"B=updated", "C=3", "MALFORMED"}
+func TestBuildChildProcessEnv(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	t.Setenv("HTTPS_PROXY", "https://proxy.example.test")
+	t.Setenv("SECRET_SHOULD_NOT_PASS", "top-secret")
 
-	merged := mergeEnv(base, overrides)
-	expected := []string{"A=1", "B=updated", "C=3"}
+	env := buildChildProcessEnv([]string{
+		"GITHUB_PERSONAL_ACCESS_TOKEN=token-123",
+		"GITHUB_HOST=https://github.com",
+		"PATH=/custom/bin", // required values should take precedence
+		"MALFORMED",
+	})
 
-	if len(merged) != len(expected) {
-		t.Fatalf("unexpected merged env length: got %d, want %d", len(merged), len(expected))
+	m := envSliceToMap(t, env)
+
+	if got := m["GITHUB_PERSONAL_ACCESS_TOKEN"]; got != "token-123" {
+		t.Fatalf("unexpected GITHUB_PERSONAL_ACCESS_TOKEN: got %q", got)
 	}
-
-	for i := range expected {
-		if merged[i] != expected[i] {
-			t.Fatalf("unexpected merged env at index %d: got %q, want %q", i, merged[i], expected[i])
-		}
+	if got := m["GITHUB_HOST"]; got != "https://github.com" {
+		t.Fatalf("unexpected GITHUB_HOST: got %q", got)
+	}
+	if got := m["PATH"]; got != "/custom/bin" {
+		t.Fatalf("expected required PATH to override parent PATH, got %q", got)
+	}
+	if got := m["HTTPS_PROXY"]; got != "https://proxy.example.test" {
+		t.Fatalf("unexpected HTTPS_PROXY: got %q", got)
+	}
+	if _, ok := m["SECRET_SHOULD_NOT_PASS"]; ok {
+		t.Fatal("unexpected secret env propagated to child process")
+	}
+	if _, ok := m["MALFORMED"]; ok {
+		t.Fatal("malformed env entry should not be propagated")
 	}
 }
 
@@ -217,4 +233,19 @@ func buildZipArchive(t *testing.T, files map[string]string) []byte {
 	}
 
 	return raw.Bytes()
+}
+
+func envSliceToMap(t *testing.T, env []string) map[string]string {
+	t.Helper()
+
+	m := make(map[string]string, len(env))
+	for _, item := range env {
+		key, value, ok := strings.Cut(item, "=")
+		if !ok || key == "" {
+			t.Fatalf("invalid env entry in test: %q", item)
+		}
+		m[key] = value
+	}
+
+	return m
 }

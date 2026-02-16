@@ -24,6 +24,32 @@ import (
 // ErrServerNonZeroExit is returned when github-mcp-server exits with non-zero status.
 var ErrServerNonZeroExit = errors.New("server exited with non-zero status")
 
+var allowedParentEnvKeys = []string{
+	// Basic runtime environment.
+	"PATH",
+	"HOME",
+	"USERPROFILE",
+	"TMPDIR",
+	"TMP",
+	"TEMP",
+	"SHELL",
+	"COMSPEC",
+	"SYSTEMROOT",
+	"WINDIR",
+
+	// Proxy/certificate environment for enterprise networks.
+	"HTTP_PROXY",
+	"HTTPS_PROXY",
+	"NO_PROXY",
+	"ALL_PROXY",
+	"http_proxy",
+	"https_proxy",
+	"no_proxy",
+	"all_proxy",
+	"SSL_CERT_FILE",
+	"SSL_CERT_DIR",
+}
+
 func runBundledServer(ctx context.Context, env []string, streams *ioStreams) error {
 	binaryPath, cleanup, err := materializeBundledServerBinary()
 	if err != nil {
@@ -35,7 +61,7 @@ func runBundledServer(ctx context.Context, env []string, streams *ioStreams) err
 	cmd.Stdin = streams.in
 	cmd.Stdout = streams.out
 	cmd.Stderr = streams.err
-	cmd.Env = mergeEnv(os.Environ(), env)
+	cmd.Env = buildChildProcessEnv(env)
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start bundled github-mcp-server: %w", err)
@@ -249,25 +275,33 @@ func extractZipExecutable(archive []byte, executableName, outputPath string) err
 	)
 }
 
-func mergeEnv(base, overrides []string) []string {
-	merged := make(map[string]string, len(base)+len(overrides))
-	order := make([]string, 0, len(base)+len(overrides))
+func buildChildProcessEnv(required []string) []string {
+	merged := make(map[string]string, len(required)+len(allowedParentEnvKeys))
+	order := make([]string, 0, len(required)+len(allowedParentEnvKeys))
 
-	apply := func(items []string) {
-		for _, item := range items {
-			key, value, ok := strings.Cut(item, "=")
-			if !ok {
-				continue
-			}
-			if _, exists := merged[key]; !exists {
-				order = append(order, key)
-			}
-			merged[key] = value
+	add := func(key, value string) {
+		if _, exists := merged[key]; !exists {
+			order = append(order, key)
 		}
+		merged[key] = value
 	}
 
-	apply(base)
-	apply(overrides)
+	for _, item := range required {
+		key, value, ok := strings.Cut(item, "=")
+		if !ok || key == "" {
+			continue
+		}
+		add(key, value)
+	}
+
+	for _, key := range allowedParentEnvKeys {
+		if _, exists := merged[key]; exists {
+			continue
+		}
+		if value, ok := os.LookupEnv(key); ok {
+			add(key, value)
+		}
+	}
 
 	result := make([]string, 0, len(order))
 	for _, key := range order {
