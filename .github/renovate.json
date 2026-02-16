@@ -11,13 +11,12 @@
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": ["/^main\\.go$/"],
+      "managerFilePatterns": ["/^mcp_version\\.go$/"],
       "matchStrings": [
-        "const mcpImage = \"(?<depName>[^@\"]+)@(?<currentDigest>sha256:[0-9a-f]{64})\"(?:\\s*//\\s*(?<currentValue>\\S+))?"
+        "const mcpServerVersion = \"(?<currentValue>v\\d+\\.\\d+\\.\\d+)\""
       ],
-      "datasourceTemplate": "docker",
-      "depNameTemplate": "{{{depName}}}",
-      "autoReplaceStringTemplate": "const mcpImage = \"{{{depName}}}@{{{newDigest}}}\" // {{{newValue}}}"
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "github/github-mcp-server"
     },
     {
       "customType": "regex",
@@ -36,34 +35,28 @@
       "automerge": true
     },
     {
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
+      "matchDatasources": ["github-releases"],
+      "matchPackageNames": ["github/github-mcp-server"],
       "automerge": false,
       "minimumReleaseAge": "0 days"
     },
     {
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
+      "matchDatasources": ["github-releases"],
+      "matchPackageNames": ["github/github-mcp-server"],
       "matchUpdateTypes": ["major"],
       "addLabels": ["renovate:major", "dependencies"]
     },
     {
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
+      "matchDatasources": ["github-releases"],
+      "matchPackageNames": ["github/github-mcp-server"],
       "matchUpdateTypes": ["minor"],
       "addLabels": ["renovate:minor", "dependencies"]
     },
     {
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["ghcr.io/github/github-mcp-server"],
+      "matchDatasources": ["github-releases"],
+      "matchPackageNames": ["github/github-mcp-server"],
       "matchUpdateTypes": ["patch"],
       "addLabels": ["dependencies"]
-    },
-    {
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["github.com/containerd/containerd"],
-      "matchUpdateTypes": ["major"],
-      "prCreation": "status-success"
     }
   ]
 }
