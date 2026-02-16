@@ -40,6 +40,7 @@ This updates `mcp_version.go` and SHA256 constants in `bundle_*.go`.
 Release archives under `bundled/` are downloaded on demand and are gitignored.
 `scripts/prepare-bundled-mcp-server.sh` and `scripts/update-bundled-mcp-server.sh` use authenticated `gh` requests (including release attestation verification),
 so run `gh auth login` locally or set `GH_TOKEN` (or `GITHUB_TOKEN`) in CI.
+The runtime binary does not perform attestation verification; instead it verifies downloaded archives against these pinned SHA256 constants.
 
 ## Development Workflow
 
