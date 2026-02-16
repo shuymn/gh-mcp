@@ -8,10 +8,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -26,7 +28,6 @@ const (
 	mcpVersionFileName           = "mcp_version.go"
 	defaultDownloadRetryCount    = 3
 	defaultDownloadRetryDelaySec = 2
-	submatchWithWholeMatchCount  = 2
 	checksumLineFieldCount       = 2
 	bundleFileGlobPattern        = "bundle_*.go"
 )
@@ -38,20 +39,19 @@ var (
 	errInvalidRetryDelay = errors.New(
 		"DOWNLOAD_RETRY_DELAY_SECONDS must be a positive integer",
 	)
-	errParseMCPVersion         = errors.New("failed to parse mcpServerVersion")
-	errGHAuthRequired          = errors.New("gh authentication is required")
-	errContextDone             = errors.New("prepare interrupted")
-	errGHCommandFailed         = errors.New("gh command failed")
-	errChecksumNotFound        = errors.New("asset checksum not found")
-	errChecksumMismatch        = errors.New("asset checksum mismatch")
-	errPinnedChecksumNotFound  = errors.New("pinned checksum not found")
-	errPinnedChecksumMismatch  = errors.New("pinned checksum mismatch")
-	errBundleMetadataNotFound  = errors.New("bundle metadata not found")
-	errBundleMetadataInvalid   = errors.New("bundle metadata is invalid")
-	mcpVersionPattern          = regexp.MustCompile(`^const mcpServerVersion = "(v[^"]+)"$`)
-	bundleArchiveNamePattern   = regexp.MustCompile(`bundledMCPArchiveName\s*=\s*"([^"]*)"`)
-	bundleArchiveSHA256Pattern = regexp.MustCompile(`bundledMCPArchiveSHA256\s*=\s*"([^"]*)"`)
-	assets                     = []string{
+	errParseMCPVersion        = errors.New("failed to parse mcpServerVersion")
+	errGHAuthRequired         = errors.New("gh authentication is required")
+	errContextDone            = errors.New("prepare interrupted")
+	errGHCommandFailed        = errors.New("gh command failed")
+	errChecksumNotFound       = errors.New("asset checksum not found")
+	errChecksumMismatch       = errors.New("asset checksum mismatch")
+	errPinnedChecksumNotFound = errors.New("pinned checksum not found")
+	errPinnedChecksumMismatch = errors.New("pinned checksum mismatch")
+	errBundleMetadataNotFound = errors.New("bundle metadata not found")
+	errBundleMetadataInvalid  = errors.New("bundle metadata is invalid")
+	errStringConstNotFound    = errors.New("string const not found")
+	errStringConstInvalid     = errors.New("string const is invalid")
+	assets                    = []string{
 		"github-mcp-server_Darwin_arm64.tar.gz",
 		"github-mcp-server_Darwin_x86_64.tar.gz",
 		"github-mcp-server_Linux_i386.tar.gz",
@@ -306,13 +306,27 @@ func parseBundleMetadata(bundleFile string) (*bundleMetadata, error) {
 		return nil, fmt.Errorf("failed to read %s: %w", bundleFile, err)
 	}
 
-	archiveName, err := extractBundleConst(string(content), bundleArchiveNamePattern)
+	fileSet := token.NewFileSet()
+	file, err := parser.ParseFile(fileSet, bundleFile, content, 0)
 	if err != nil {
-		return nil, fmt.Errorf("%w: file=%s field=bundledMCPArchiveName", err, bundleFile)
+		return nil, fmt.Errorf("failed to parse %s: %w", bundleFile, err)
 	}
-	sha256, err := extractBundleConst(string(content), bundleArchiveSHA256Pattern)
+
+	archiveName, err := extractBundleConst(file, "bundledMCPArchiveName")
 	if err != nil {
-		return nil, fmt.Errorf("%w: file=%s field=bundledMCPArchiveSHA256", err, bundleFile)
+		return nil, fmt.Errorf(
+			"%w: file=%s field=bundledMCPArchiveName",
+			classifyBundleMetadataConstErr(err),
+			bundleFile,
+		)
+	}
+	sha256, err := extractBundleConst(file, "bundledMCPArchiveSHA256")
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%w: file=%s field=bundledMCPArchiveSHA256",
+			classifyBundleMetadataConstErr(err),
+			bundleFile,
+		)
 	}
 
 	return &bundleMetadata{
@@ -321,13 +335,49 @@ func parseBundleMetadata(bundleFile string) (*bundleMetadata, error) {
 	}, nil
 }
 
-func extractBundleConst(content string, pattern *regexp.Regexp) (string, error) {
-	matches := pattern.FindStringSubmatch(content)
-	if len(matches) != submatchWithWholeMatchCount {
-		return "", errBundleMetadataNotFound
+func classifyBundleMetadataConstErr(err error) error {
+	if errors.Is(err, errStringConstNotFound) {
+		return errBundleMetadataNotFound
 	}
 
-	return matches[1], nil
+	return errBundleMetadataInvalid
+}
+
+func extractBundleConst(file *ast.File, constName string) (string, error) {
+	for _, decl := range file.Decls {
+		genDecl, ok := decl.(*ast.GenDecl)
+		if !ok || genDecl.Tok != token.CONST {
+			continue
+		}
+
+		for _, spec := range genDecl.Specs {
+			valueSpec, ok := spec.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+
+			for index, name := range valueSpec.Names {
+				if name.Name != constName {
+					continue
+				}
+
+				valueExpr := valueSpecExprAt(valueSpec, index)
+				lit, ok := valueExpr.(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					return "", fmt.Errorf("%w: const=%s", errStringConstInvalid, constName)
+				}
+
+				value, err := strconv.Unquote(lit.Value)
+				if err != nil {
+					return "", fmt.Errorf("%w: const=%s", errStringConstInvalid, constName)
+				}
+
+				return value, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("%w: const=%s", errStringConstNotFound, constName)
 }
 
 func verifyPinnedChecksums(checksums map[string]string, pinnedChecksums map[string]string) error {
@@ -356,18 +406,32 @@ func verifyPinnedChecksums(checksums map[string]string, pinnedChecksums map[stri
 }
 
 func parseMCPServerVersion(content []byte) (string, error) {
-	scanner := bufio.NewScanner(strings.NewReader(string(content)))
-	for scanner.Scan() {
-		matches := mcpVersionPattern.FindStringSubmatch(strings.TrimSpace(scanner.Text()))
-		if len(matches) == submatchWithWholeMatchCount {
-			return matches[1], nil
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("failed reading %s: %w", mcpVersionFileName, err)
+	fileSet := token.NewFileSet()
+	file, err := parser.ParseFile(fileSet, mcpVersionFileName, content, 0)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse %s: %w", mcpVersionFileName, err)
 	}
 
-	return "", fmt.Errorf("%w from %s", errParseMCPVersion, mcpVersionFileName)
+	version, err := extractBundleConst(file, "mcpServerVersion")
+	if err != nil || !strings.HasPrefix(version, "v") || len(version) <= 1 {
+		return "", fmt.Errorf("%w from %s", errParseMCPVersion, mcpVersionFileName)
+	}
+
+	return version, nil
+}
+
+func valueSpecExprAt(valueSpec *ast.ValueSpec, index int) ast.Expr {
+	if valueSpec == nil || len(valueSpec.Values) == 0 {
+		return nil
+	}
+	if len(valueSpec.Values) == len(valueSpec.Names) {
+		return valueSpec.Values[index]
+	}
+	if len(valueSpec.Values) == 1 {
+		return valueSpec.Values[0]
+	}
+
+	return nil
 }
 
 func positiveIntFromEnv(key string, defaultValue int, invalidValueErr error) (int, error) {

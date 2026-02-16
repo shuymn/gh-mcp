@@ -26,10 +26,96 @@ const mcpServerVersion = "v0.30.3"
 		}
 	})
 
+	t.Run("parses version from grouped const", func(t *testing.T) {
+		content := []byte(`package main
+
+const (
+	otherConst = "value"
+	mcpServerVersion = "v1.2.3"
+)
+`)
+		version, err := parseMCPServerVersion(content)
+		if err != nil {
+			t.Fatalf("parseMCPServerVersion returned error: %v", err)
+		}
+		if version != "v1.2.3" {
+			t.Fatalf("unexpected version: got %q", version)
+		}
+	})
+
 	t.Run("missing version", func(t *testing.T) {
 		_, err := parseMCPServerVersion([]byte("package main"))
 		if err == nil {
 			t.Fatal("expected parseMCPServerVersion to fail when constant is missing")
+		}
+	})
+}
+
+func TestParseBundleMetadata(t *testing.T) {
+	t.Run("parses metadata from const block", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "bundle_fixture.go")
+		content := `package main
+
+const (
+	bundledMCPArchiveName    = "github-mcp-server_Darwin_arm64.tar.gz"
+	bundledMCPArchiveSHA256  = "abc123"
+	bundledMCPExecutableName = "github-mcp-server"
+)
+`
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatalf("failed to write fixture: %v", err)
+		}
+
+		metadata, err := parseBundleMetadata(path)
+		if err != nil {
+			t.Fatalf("parseBundleMetadata returned error: %v", err)
+		}
+		if metadata.archiveName != "github-mcp-server_Darwin_arm64.tar.gz" {
+			t.Fatalf("unexpected archiveName: got %q", metadata.archiveName)
+		}
+		if metadata.sha256 != "abc123" {
+			t.Fatalf("unexpected sha256: got %q", metadata.sha256)
+		}
+	})
+
+	t.Run("missing const", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "bundle_missing.go")
+		content := `package main
+
+const bundledMCPArchiveSHA256 = "abc123"
+`
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatalf("failed to write fixture: %v", err)
+		}
+
+		_, err := parseBundleMetadata(path)
+		if err == nil {
+			t.Fatal("expected parseBundleMetadata to fail when const is missing")
+		}
+		if !errors.Is(err, errBundleMetadataNotFound) {
+			t.Fatalf("expected errBundleMetadataNotFound, got: %v", err)
+		}
+	})
+
+	t.Run("invalid const type", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "bundle_invalid.go")
+		content := `package main
+
+const (
+	bundledMCPArchiveName   = 123
+	bundledMCPArchiveSHA256 = "abc123"
+)
+`
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatalf("failed to write fixture: %v", err)
+		}
+
+		_, err := parseBundleMetadata(path)
+		if err == nil {
+			t.Fatal("expected parseBundleMetadata to fail for non-string const")
+		}
+		if !errors.Is(err, errBundleMetadataInvalid) {
+			t.Fatalf("expected errBundleMetadataInvalid, got: %v", err)
 		}
 	})
 }

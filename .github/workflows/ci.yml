@@ -32,7 +32,7 @@ jobs:
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: bundled/github-mcp-server_*
-        key: bundled-assets-${{ hashFiles('bundle_*.go') }}
+        key: bundled-assets-${{ hashFiles('bundle_*.go', 'mcp_version.go') }}
         enableCrossOsArchive: true
 
     - name: Prepare bundled assets
@@ -79,7 +79,7 @@ jobs:
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: bundled/github-mcp-server_*
-        key: bundled-assets-${{ hashFiles('bundle_*.go') }}
+        key: bundled-assets-${{ hashFiles('bundle_*.go', 'mcp_version.go') }}
         enableCrossOsArchive: true
 
     - name: Prepare bundled assets
@@ -128,7 +128,7 @@ jobs:
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: bundled/github-mcp-server_*
-        key: bundled-assets-${{ hashFiles('bundle_*.go') }}
+        key: bundled-assets-${{ hashFiles('bundle_*.go', 'mcp_version.go') }}
         enableCrossOsArchive: true
 
     - name: Prepare bundled assets

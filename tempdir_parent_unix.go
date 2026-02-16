@@ -7,7 +7,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
+	"os"
 	"path/filepath"
+	"syscall"
 
 	"golang.org/x/sys/unix"
 )
@@ -17,6 +20,79 @@ const tempDirNameAttempts = 256
 var errBundledTempDirNameAttemptsExhausted = errors.New(
 	"bundled temp directory name attempts exhausted",
 )
+
+func ensureSecureUnixTempParentDir(
+	parentDir string,
+	handle *os.File,
+	info os.FileInfo,
+) (os.FileInfo, error) {
+	if uid, ok := fileInfoUID(info); ok && uid != os.Geteuid() {
+		return nil, fmt.Errorf(
+			"%w: parent directory %q must be owned by the current user",
+			errBundledTempParentInsecure,
+			parentDir,
+		)
+	}
+
+	if perms := info.Mode().Perm(); perms&0o077 == 0 {
+		return info, nil
+	}
+
+	if err := handle.Chmod(0o700); err != nil {
+		return nil, fmt.Errorf(
+			"failed to tighten parent directory %q permissions: %w",
+			parentDir,
+			err,
+		)
+	}
+
+	tightenedInfo, err := handle.Stat()
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to stat opened parent directory %q after chmod: %w",
+			parentDir,
+			err,
+		)
+	}
+	if err := validateTempParentDirInfo(parentDir, tightenedInfo); err != nil {
+		return nil, err
+	}
+	if perms := tightenedInfo.Mode().Perm(); perms&0o077 != 0 {
+		return nil, fmt.Errorf(
+			"%w: parent directory %q permissions are too broad (%#o)",
+			errBundledTempParentInsecure,
+			parentDir,
+			perms,
+		)
+	}
+
+	return tightenedInfo, nil
+}
+
+func fileInfoUID(info os.FileInfo) (int, bool) {
+	switch stat := info.Sys().(type) {
+	case *syscall.Stat_t:
+		if stat == nil {
+			return 0, false
+		}
+
+		uid := uint64(stat.Uid)
+		if uid > uint64(math.MaxInt) {
+			return 0, false
+		}
+
+		return int(uid), true
+	case syscall.Stat_t:
+		uid := uint64(stat.Uid)
+		if uid > uint64(math.MaxInt) {
+			return 0, false
+		}
+
+		return int(uid), true
+	default:
+		return 0, false
+	}
+}
 
 func createTempDirInVerifiedParent(
 	parentDir string,

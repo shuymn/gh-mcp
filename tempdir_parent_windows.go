@@ -7,6 +7,10 @@ import (
 	"os"
 )
 
+func ensureSecureUnixTempParentDir(_ string, _ *os.File, info os.FileInfo) (os.FileInfo, error) {
+	return info, nil
+}
+
 func createTempDirInVerifiedParent(
 	parentDir string,
 	parentState *tempParentDirState,

@@ -315,8 +315,8 @@ func TestCreateTempDirRejectsSymlinkParent(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected createTempDir to reject symlink parent")
 	}
-	if !errors.Is(err, ErrBundledTempParentInsecure) {
-		t.Fatalf("expected ErrBundledTempParentInsecure, got: %v", err)
+	if !errors.Is(err, errBundledTempParentInsecure) {
+		t.Fatalf("expected errBundledTempParentInsecure, got: %v", err)
 	}
 }
 
@@ -366,8 +366,8 @@ func TestVerifyTempParentDirUnchangedDetectsReplacement(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected parent replacement to be detected")
 	}
-	if !errors.Is(err, ErrBundledTempParentInsecure) {
-		t.Fatalf("expected ErrBundledTempParentInsecure, got: %v", err)
+	if !errors.Is(err, errBundledTempParentInsecure) {
+		t.Fatalf("expected errBundledTempParentInsecure, got: %v", err)
 	}
 }
 
@@ -404,8 +404,8 @@ func TestWaitForServerExit(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected waitForServerExit to return non-zero exit error")
 		}
-		if !errors.Is(err, ErrServerNonZeroExit) {
-			t.Fatalf("expected ErrServerNonZeroExit, got: %v", err)
+		if !errors.Is(err, errServerNonZeroExit) {
+			t.Fatalf("expected errServerNonZeroExit, got: %v", err)
 		}
 		if !strings.Contains(err.Error(), ": 9") {
 			t.Fatalf("expected exit code 9 in error, got: %v", err)
@@ -481,8 +481,8 @@ func TestNormalizeServerExit(t *testing.T) {
 	}
 
 	normalized := normalizeServerExit(err)
-	if !errors.Is(normalized, ErrServerNonZeroExit) {
-		t.Fatalf("expected ErrServerNonZeroExit, got: %v", normalized)
+	if !errors.Is(normalized, errServerNonZeroExit) {
+		t.Fatalf("expected errServerNonZeroExit, got: %v", normalized)
 	}
 	if !strings.Contains(normalized.Error(), ": 7") {
 		t.Fatalf("expected exit code 7 in normalized error, got: %v", normalized)
