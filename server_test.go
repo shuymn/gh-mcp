@@ -36,18 +36,17 @@ func TestVerifyBundledArchiveChecksum(t *testing.T) {
 }
 
 func TestExtractTarGzExecutable(t *testing.T) {
+	const executableName = "github-mcp-server"
+
 	archive := buildTarGzArchive(t, map[string]string{
 		"README.md":          "readme",
-		"github-mcp-server":  "binary-content",
+		executableName:       "binary-content",
 		"nested/another.txt": "other",
 	})
 
-	outputPath := filepath.Join(t.TempDir(), "github-mcp-server")
-	if runtime.GOOS == "windows" {
-		outputPath += ".exe"
-	}
+	outputPath := filepath.Join(t.TempDir(), executableName)
 
-	if err := extractTarGzExecutable(archive, filepath.Base(outputPath), outputPath); err != nil {
+	if err := extractTarGzExecutable(archive, executableName, outputPath); err != nil {
 		t.Fatalf("extractTarGzExecutable returned error: %v", err)
 	}
 

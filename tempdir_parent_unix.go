@@ -150,3 +150,16 @@ func randomTempDirName() (string, error) {
 
 	return "gh-mcp-server-" + hex.EncodeToString(suffix[:]), nil
 }
+
+func openTempParentDir(parentDir string) (*os.File, error) {
+	handle, err := os.Open(parentDir)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to open parent directory %q for verification: %w",
+			parentDir,
+			err,
+		)
+	}
+
+	return handle, nil
+}

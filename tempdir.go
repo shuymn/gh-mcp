@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"runtime"
 )
 
 type tempParentDirState struct {
@@ -95,17 +94,10 @@ func ensureSecureTempParentDir(parentDir string) (*tempParentDirState, error) {
 	}
 
 	state := &tempParentDirState{info: info}
-	if runtime.GOOS == "windows" {
-		return state, nil
-	}
 
-	handle, err := os.Open(parentDir)
+	handle, err := openTempParentDir(parentDir)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to open parent directory %q for verification: %w",
-			parentDir,
-			err,
-		)
+		return nil, err
 	}
 
 	handleInfo, err := handle.Stat()
