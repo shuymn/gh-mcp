@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -60,9 +61,18 @@ func main() {
 }
 
 func run(ctx context.Context, args []string) error {
-	version, err := resolveVersion(args)
+	options, err := parseArgs(args)
 	if err != nil {
 		return err
+	}
+
+	version, err := resolveVersion(options.version)
+	if err != nil {
+		return err
+	}
+
+	if options.checkOnly {
+		return checkBundledAssets(version)
 	}
 
 	retryCount, err := positiveIntFromEnv(
@@ -103,10 +113,7 @@ func run(ctx context.Context, args []string) error {
 		_ = os.RemoveAll(stagingDir)
 	}()
 
-	checksumsAsset := fmt.Sprintf(
-		"github-mcp-server_%s_checksums.txt",
-		strings.TrimPrefix(version, "v"),
-	)
+	checksumsAsset := checksumsAssetName(version)
 	checksumsFile := filepath.Join(stagingDir, checksumsAsset)
 
 	fmt.Printf("Downloading checksums for %s...\n", version)
@@ -174,25 +181,71 @@ func run(ctx context.Context, args []string) error {
 	return nil
 }
 
-func resolveVersion(args []string) (string, error) {
-	switch len(args) {
-	case 0:
-		content, err := os.ReadFile(mcpVersionFileName)
-		if err != nil {
-			return "", fmt.Errorf("failed to read %s: %w", mcpVersionFileName, err)
-		}
+type prepareOptions struct {
+	checkOnly bool
+	version   string
+}
 
-		version, err := parseMCPServerVersion(content)
-		if err != nil {
-			return "", err
-		}
+func parseArgs(args []string) (*prepareOptions, error) {
+	flagSet := flag.NewFlagSet("prepare", flag.ContinueOnError)
+	flagSet.SetOutput(io.Discard)
 
-		return version, nil
-	case 1:
-		return args[0], nil
-	default:
-		return "", errUsage
+	checkOnly := flagSet.Bool("check", false, "validate bundled assets without downloading")
+	if err := flagSet.Parse(args); err != nil {
+		return nil, errUsage
 	}
+
+	remaining := flagSet.Args()
+	if len(remaining) > 1 {
+		return nil, errUsage
+	}
+
+	options := &prepareOptions{
+		checkOnly: *checkOnly,
+	}
+	if len(remaining) == 1 {
+		options.version = remaining[0]
+	}
+
+	return options, nil
+}
+
+func resolveVersion(version string) (string, error) {
+	if version != "" {
+		return version, nil
+	}
+
+	content, err := os.ReadFile(mcpVersionFileName)
+	if err != nil {
+		return "", fmt.Errorf("failed to read %s: %w", mcpVersionFileName, err)
+	}
+
+	return parseMCPServerVersion(content)
+}
+
+func checksumsAssetName(version string) string {
+	return fmt.Sprintf("github-mcp-server_%s_checksums.txt", strings.TrimPrefix(version, "v"))
+}
+
+func checkBundledAssets(version string) error {
+	checksumsFile := filepath.Join(bundledDirName, checksumsAssetName(version))
+
+	checksums, err := loadChecksums(checksumsFile)
+	if err != nil {
+		return err
+	}
+
+	for _, asset := range assets {
+		filePath := filepath.Join(bundledDirName, asset)
+		if _, err := os.Stat(filePath); err != nil {
+			return fmt.Errorf("failed to stat bundled asset %s: %w", filePath, err)
+		}
+		if err := verifyAssetChecksum(checksums, asset, filePath, checksumsFile); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func parseMCPServerVersion(content []byte) (string, error) {

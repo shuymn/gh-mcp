@@ -1,9 +1,12 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -74,6 +77,74 @@ func TestPositiveIntFromEnv(t *testing.T) {
 	})
 }
 
+func TestParseArgs(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		options, err := parseArgs(nil)
+		if err != nil {
+			t.Fatalf("parseArgs returned error: %v", err)
+		}
+		if options.checkOnly {
+			t.Fatal("expected checkOnly to be false")
+		}
+		if options.version != "" {
+			t.Fatalf("expected empty version, got %q", options.version)
+		}
+	})
+
+	t.Run("check only with single hyphen", func(t *testing.T) {
+		options, err := parseArgs([]string{"-check"})
+		if err != nil {
+			t.Fatalf("parseArgs returned error: %v", err)
+		}
+		if !options.checkOnly {
+			t.Fatal("expected checkOnly to be true")
+		}
+		if options.version != "" {
+			t.Fatalf("expected empty version, got %q", options.version)
+		}
+	})
+
+	t.Run("check only with double hyphen", func(t *testing.T) {
+		options, err := parseArgs([]string{"--check"})
+		if err != nil {
+			t.Fatalf("parseArgs returned error: %v", err)
+		}
+		if !options.checkOnly {
+			t.Fatal("expected checkOnly to be true")
+		}
+		if options.version != "" {
+			t.Fatalf("expected empty version, got %q", options.version)
+		}
+	})
+
+	t.Run("check with version", func(t *testing.T) {
+		options, err := parseArgs([]string{"-check", "v0.30.3"})
+		if err != nil {
+			t.Fatalf("parseArgs returned error: %v", err)
+		}
+		if !options.checkOnly {
+			t.Fatal("expected checkOnly to be true")
+		}
+		if options.version != "v0.30.3" {
+			t.Fatalf("unexpected version: got %q", options.version)
+		}
+	})
+
+	t.Run("unknown flag", func(t *testing.T) {
+		_, err := parseArgs([]string{"--unknown"})
+		if !errors.Is(err, errUsage) {
+			t.Fatalf("expected errUsage, got: %v", err)
+		}
+	})
+
+	t.Run("multiple versions", func(t *testing.T) {
+		_, err := parseArgs([]string{"v0.30.3", "v0.30.4"})
+		if !errors.Is(err, errUsage) {
+			t.Fatalf("expected errUsage, got: %v", err)
+		}
+	})
+}
+
 func TestLoadChecksums(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "checksums.txt")
 	if err := os.WriteFile(
@@ -94,5 +165,80 @@ func TestLoadChecksums(t *testing.T) {
 	}
 	if got := checksums["file-b.zip"]; got != "bbb" {
 		t.Fatalf("unexpected checksum for file-b.zip: got %q", got)
+	}
+}
+
+func TestCheckBundledAssets(t *testing.T) {
+	version := "v0.30.3"
+
+	t.Run("success", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		createBundledFixture(t, version)
+
+		if err := checkBundledAssets(version); err != nil {
+			t.Fatalf("checkBundledAssets returned error: %v", err)
+		}
+	})
+
+	t.Run("missing asset", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		createBundledFixture(t, version)
+
+		missingPath := filepath.Join(bundledDirName, assets[0])
+		if err := os.Remove(missingPath); err != nil {
+			t.Fatalf("failed to remove fixture asset: %v", err)
+		}
+
+		err := checkBundledAssets(version)
+		if err == nil {
+			t.Fatal("expected checkBundledAssets to fail when asset is missing")
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected os.ErrNotExist, got: %v", err)
+		}
+	})
+
+	t.Run("checksum mismatch", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		createBundledFixture(t, version)
+
+		targetPath := filepath.Join(bundledDirName, assets[0])
+		if err := os.WriteFile(targetPath, []byte("tampered"), 0o600); err != nil {
+			t.Fatalf("failed to tamper fixture asset: %v", err)
+		}
+
+		err := checkBundledAssets(version)
+		if err == nil {
+			t.Fatal("expected checkBundledAssets to fail on checksum mismatch")
+		}
+		if !errors.Is(err, errChecksumMismatch) {
+			t.Fatalf("expected errChecksumMismatch, got: %v", err)
+		}
+	})
+}
+
+func createBundledFixture(t *testing.T, version string) {
+	t.Helper()
+
+	if err := os.MkdirAll(bundledDirName, 0o755); err != nil {
+		t.Fatalf("failed to create %s: %v", bundledDirName, err)
+	}
+
+	lines := make([]string, 0, len(assets))
+	for _, asset := range assets {
+		body := []byte("fixture-" + asset)
+		assetPath := filepath.Join(bundledDirName, asset)
+		if err := os.WriteFile(assetPath, body, 0o600); err != nil {
+			t.Fatalf("failed to write fixture asset %s: %v", asset, err)
+		}
+
+		sum := sha256.Sum256(body)
+		lines = append(lines, hex.EncodeToString(sum[:])+" "+asset)
+	}
+
+	checksumsPath := filepath.Join(bundledDirName, checksumsAssetName(version))
+	content := strings.Join(lines, "\n") + "\n"
+	if err := os.WriteFile(checksumsPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("failed to write fixture checksums: %v", err)
 	}
 }
