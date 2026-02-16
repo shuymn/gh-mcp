@@ -28,8 +28,9 @@ fi
 VERSION_NO_V="${VERSION#v}"
 UPSTREAM_REPOSITORY="github/github-mcp-server"
 BUNDLED_DIR="bundled"
-CHECKSUMS_FILE="${BUNDLED_DIR}/github-mcp-server_${VERSION_NO_V}_checksums.txt"
 CHECKSUMS_ASSET="github-mcp-server_${VERSION_NO_V}_checksums.txt"
+DOWNLOAD_RETRY_COUNT="${DOWNLOAD_RETRY_COUNT:-3}"
+DOWNLOAD_RETRY_DELAY_SECONDS="${DOWNLOAD_RETRY_DELAY_SECONDS:-2}"
 
 ASSETS=(
   "github-mcp-server_Darwin_arm64.tar.gz"
@@ -41,6 +42,16 @@ ASSETS=(
   "github-mcp-server_Windows_i386.zip"
   "github-mcp-server_Windows_x86_64.zip"
 )
+
+STAGING_DIR=""
+CHECKSUMS_FILE=""
+
+cleanup_staging_dir() {
+  if [[ -n "${STAGING_DIR}" && -d "${STAGING_DIR}" ]]; then
+    rm -rf "${STAGING_DIR}"
+  fi
+}
+trap cleanup_staging_dir EXIT
 
 ensure_gh_auth() {
   if [[ -n "${GH_TOKEN:-}" || -n "${GITHUB_TOKEN:-}" ]]; then
@@ -54,6 +65,27 @@ ensure_gh_auth() {
   echo "gh authentication is required."
   echo "Run 'gh auth login' locally, or set GH_TOKEN (or GITHUB_TOKEN) in CI."
   exit 1
+}
+
+run_with_retry() {
+  local description="$1"
+  shift
+
+  local attempt=1
+  while true; do
+    if "$@"; then
+      return 0
+    fi
+
+    if (( attempt >= DOWNLOAD_RETRY_COUNT )); then
+      echo "Failed: ${description} (attempts=${attempt})"
+      return 1
+    fi
+
+    echo "Retrying: ${description} (${attempt}/${DOWNLOAD_RETRY_COUNT}) in ${DOWNLOAD_RETRY_DELAY_SECONDS}s..."
+    sleep "${DOWNLOAD_RETRY_DELAY_SECONDS}"
+    attempt=$((attempt + 1))
+  done
 }
 
 sha256_file() {
@@ -74,11 +106,12 @@ sha256_file() {
 
 download_release_asset() {
   local asset_name="$1"
+  local output_dir="$2"
 
   gh release download "${VERSION}" \
     --repo "${UPSTREAM_REPOSITORY}" \
     --pattern "${asset_name}" \
-    --dir "${BUNDLED_DIR}" \
+    --dir "${output_dir}" \
     --clobber
 }
 
@@ -107,19 +140,43 @@ verify_asset_against_checksums_file() {
   fi
 }
 
+verify_checksums_attestation() {
+  gh release verify-asset "${VERSION}" "${CHECKSUMS_FILE}" --repo "${UPSTREAM_REPOSITORY}" >/dev/null
+}
+
+download_and_verify_asset() {
+  local asset_name="$1"
+  local file_path="${STAGING_DIR}/${asset_name}"
+
+  echo "Downloading ${asset_name}..."
+  run_with_retry "download ${asset_name}" download_release_asset "${asset_name}" "${STAGING_DIR}"
+  verify_asset_against_checksums_file "${asset_name}" "${file_path}"
+}
+
+promote_staged_asset() {
+  local asset_name="$1"
+
+  mv -f "${STAGING_DIR}/${asset_name}" "${BUNDLED_DIR}/${asset_name}"
+}
+
 ensure_gh_auth
 mkdir -p "${BUNDLED_DIR}"
+STAGING_DIR="$(mktemp -d "${BUNDLED_DIR}/.prepare-bundled-mcp-server.XXXXXX")"
+CHECKSUMS_FILE="${STAGING_DIR}/${CHECKSUMS_ASSET}"
 
 echo "Downloading checksums for ${VERSION}..."
-download_release_asset "${CHECKSUMS_ASSET}"
+run_with_retry "download ${CHECKSUMS_ASSET}" download_release_asset "${CHECKSUMS_ASSET}" "${STAGING_DIR}"
 
 echo "Verifying attestation for ${CHECKSUMS_ASSET}..."
-gh release verify-asset "${VERSION}" "${CHECKSUMS_FILE}" --repo "${UPSTREAM_REPOSITORY}" >/dev/null
+run_with_retry "verify attestation for ${CHECKSUMS_ASSET}" verify_checksums_attestation
 
 for asset in "${ASSETS[@]}"; do
-  echo "Downloading ${asset}..."
-  download_release_asset "${asset}"
-  verify_asset_against_checksums_file "${asset}" "${BUNDLED_DIR}/${asset}"
+  download_and_verify_asset "${asset}"
 done
+
+for asset in "${ASSETS[@]}"; do
+  promote_staged_asset "${asset}"
+done
+promote_staged_asset "${CHECKSUMS_ASSET}"
 
 echo "Bundled assets prepared for ${VERSION}."
