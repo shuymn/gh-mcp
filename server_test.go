@@ -179,12 +179,15 @@ func TestCopyBundledExecutableWithLimit(t *testing.T) {
 func TestBuildChildProcessEnv(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin:/bin")
 	t.Setenv("HTTPS_PROXY", "https://proxy.example.test")
+	t.Setenv("NODE_OPTIONS", "--require=/tmp/evil.js")
+	t.Setenv("NODE_EXTRA_CA_CERTS", "/tmp/evil-ca.pem")
 	t.Setenv("SECRET_SHOULD_NOT_PASS", "top-secret")
 
 	env := buildChildProcessEnv([]string{
 		"GITHUB_PERSONAL_ACCESS_TOKEN=token-123",
 		"GITHUB_HOST=https://github.com",
 		"PATH=/custom/bin", // required values should take precedence
+		"NODE_OPTIONS=--inspect",
 		"MALFORMED",
 	})
 
@@ -204,6 +207,12 @@ func TestBuildChildProcessEnv(t *testing.T) {
 	}
 	if _, ok := m["SECRET_SHOULD_NOT_PASS"]; ok {
 		t.Fatal("unexpected secret env propagated to child process")
+	}
+	if _, ok := m["NODE_OPTIONS"]; ok {
+		t.Fatal("NODE_OPTIONS must not be propagated to child process")
+	}
+	if _, ok := m["NODE_EXTRA_CA_CERTS"]; ok {
+		t.Fatal("NODE_EXTRA_CA_CERTS must not be propagated to child process")
 	}
 	if _, ok := m["MALFORMED"]; ok {
 		t.Fatal("malformed env entry should not be propagated")
@@ -291,6 +300,78 @@ func TestCreateTempDirWithFallback(t *testing.T) {
 
 	if !strings.HasPrefix(tmpDir, validParent+string(filepath.Separator)) {
 		t.Fatalf("expected temp dir under %q, got %q", validParent, tmpDir)
+	}
+}
+
+func TestCreateTempDirRejectsSymlinkParent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink behavior is platform-specific on Windows")
+	}
+
+	root := t.TempDir()
+	realParent := filepath.Join(root, "cache-real")
+	if err := os.Mkdir(realParent, 0o700); err != nil {
+		t.Fatalf("failed to create real parent directory: %v", err)
+	}
+
+	symlinkParent := filepath.Join(root, "cache-link")
+	if err := os.Symlink(realParent, symlinkParent); err != nil {
+		t.Skipf("failed to create symlink parent on this platform: %v", err)
+	}
+
+	_, err := createTempDir(symlinkParent)
+	if err == nil {
+		t.Fatal("expected createTempDir to reject symlink parent")
+	}
+	if !errors.Is(err, ErrBundledTempParentInsecure) {
+		t.Fatalf("expected ErrBundledTempParentInsecure, got: %v", err)
+	}
+}
+
+func TestEnsureSecureTempParentDirTightensPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits are not POSIX-compatible on Windows")
+	}
+
+	parent := filepath.Join(t.TempDir(), "cache")
+	if err := os.Mkdir(parent, 0o777); err != nil {
+		t.Fatalf("failed to create parent directory: %v", err)
+	}
+
+	if _, err := ensureSecureTempParentDir(parent); err != nil {
+		t.Fatalf("ensureSecureTempParentDir returned error: %v", err)
+	}
+
+	info, err := os.Stat(parent)
+	if err != nil {
+		t.Fatalf("failed to stat parent directory: %v", err)
+	}
+	if perms := info.Mode().Perm(); perms&0o077 != 0 {
+		t.Fatalf("expected private permissions, got %#o", perms)
+	}
+}
+
+func TestVerifyTempParentDirUnchangedDetectsReplacement(t *testing.T) {
+	parent := filepath.Join(t.TempDir(), "cache")
+
+	info, err := ensureSecureTempParentDir(parent)
+	if err != nil {
+		t.Fatalf("ensureSecureTempParentDir returned error: %v", err)
+	}
+
+	if err := os.Remove(parent); err != nil {
+		t.Fatalf("failed to remove parent directory: %v", err)
+	}
+	if err := os.Mkdir(parent, 0o700); err != nil {
+		t.Fatalf("failed to recreate parent directory: %v", err)
+	}
+
+	err = verifyTempParentDirUnchanged(parent, info)
+	if err == nil {
+		t.Fatal("expected parent replacement to be detected")
+	}
+	if !errors.Is(err, ErrBundledTempParentInsecure) {
+		t.Fatalf("expected ErrBundledTempParentInsecure, got: %v", err)
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"time"
@@ -37,6 +38,8 @@ var (
 	ErrBundledExecutableTooLarge = errors.New("bundled executable exceeds extraction size limit")
 	// ErrBundledExecutableInvalidSize is returned when archive metadata reports an invalid executable size.
 	ErrBundledExecutableInvalidSize = errors.New("bundled executable has invalid size")
+	// ErrBundledTempParentInsecure is returned when the temp parent directory fails safety checks.
+	ErrBundledTempParentInsecure = errors.New("bundled temp parent directory is insecure")
 )
 
 const (
@@ -73,6 +76,12 @@ var allowedParentEnvKeys = []string{
 	"SSL_CERT_DIR",
 }
 
+var blockedChildEnvKeys = map[string]struct{}{
+	"NODE_OPTIONS":        {},
+	"NODE_EXTRA_CA_CERTS": {},
+	"NODE_PATH":           {},
+}
+
 func runBundledServer(ctx context.Context, env []string, streams *ioStreams) error {
 	binaryPath, cleanup, err := materializeBundledServerBinary()
 	if err != nil {
@@ -80,8 +89,12 @@ func runBundledServer(ctx context.Context, env []string, streams *ioStreams) err
 	}
 	defer cleanup()
 
-	// Keep lifecycle control in waitForServerExit to allow graceful interrupt handling.
-	cmd := exec.CommandContext(context.WithoutCancel(ctx), binaryPath, "stdio")
+	if ctx.Err() != nil {
+		return nil
+	}
+
+	// Keep lifecycle ownership in waitForServerExit for graceful interrupt handling.
+	cmd := exec.CommandContext(context.Background(), binaryPath, "stdio")
 	cmd.Stdin = streams.in
 	cmd.Stdout = streams.out
 	cmd.Stderr = streams.err
@@ -238,9 +251,13 @@ func createTempDirWithFallback(parentDirs []string) (string, error) {
 }
 
 func createTempDir(parentDir string) (string, error) {
+	var parentInfo os.FileInfo
+	var err error
+
 	if parentDir != "" {
-		if err := os.MkdirAll(parentDir, 0o700); err != nil {
-			return "", fmt.Errorf("failed to create parent directory %q: %w", parentDir, err)
+		parentInfo, err = ensureSecureTempParentDir(parentDir)
+		if err != nil {
+			return "", err
 		}
 	}
 
@@ -251,8 +268,150 @@ func createTempDir(parentDir string) (string, error) {
 		}
 		return "", fmt.Errorf("failed to create temporary directory in %q: %w", parentDir, err)
 	}
+	if parentDir != "" {
+		if err := verifyTempParentDirUnchanged(parentDir, parentInfo); err != nil {
+			_ = os.RemoveAll(tmpDir)
+			return "", err
+		}
+	}
 
 	return tmpDir, nil
+}
+
+func ensureSecureTempParentDir(parentDir string) (os.FileInfo, error) {
+	if err := os.MkdirAll(parentDir, 0o700); err != nil {
+		return nil, fmt.Errorf("failed to create parent directory %q: %w", parentDir, err)
+	}
+
+	info, err := os.Lstat(parentDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat parent directory %q: %w", parentDir, err)
+	}
+	if err := validateTempParentDirInfo(parentDir, info); err != nil {
+		return nil, err
+	}
+
+	if runtime.GOOS == "windows" {
+		return info, nil
+	}
+
+	return ensureSecureUnixTempParentDir(parentDir, info)
+}
+
+func ensureSecureUnixTempParentDir(parentDir string, info os.FileInfo) (os.FileInfo, error) {
+	if uid, ok := fileInfoUID(info); ok && uid != os.Geteuid() {
+		return nil, fmt.Errorf(
+			"%w: parent directory %q must be owned by the current user",
+			ErrBundledTempParentInsecure,
+			parentDir,
+		)
+	}
+
+	if perms := info.Mode().Perm(); perms&0o077 == 0 {
+		return info, nil
+	}
+
+	if err := os.Chmod(parentDir, 0o700); err != nil {
+		return nil, fmt.Errorf(
+			"failed to tighten parent directory %q permissions: %w",
+			parentDir,
+			err,
+		)
+	}
+
+	tightenedInfo, err := os.Lstat(parentDir)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to stat parent directory %q after chmod: %w",
+			parentDir,
+			err,
+		)
+	}
+	if err := validateTempParentDirInfo(parentDir, tightenedInfo); err != nil {
+		return nil, err
+	}
+	if perms := tightenedInfo.Mode().Perm(); perms&0o077 != 0 {
+		return nil, fmt.Errorf(
+			"%w: parent directory %q permissions are too broad (%#o)",
+			ErrBundledTempParentInsecure,
+			parentDir,
+			perms,
+		)
+	}
+
+	return tightenedInfo, nil
+}
+
+func validateTempParentDirInfo(parentDir string, info os.FileInfo) error {
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf(
+			"%w: parent directory %q must not be a symbolic link",
+			ErrBundledTempParentInsecure,
+			parentDir,
+		)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf(
+			"%w: parent path %q is not a directory",
+			ErrBundledTempParentInsecure,
+			parentDir,
+		)
+	}
+
+	return nil
+}
+
+func fileInfoUID(info os.FileInfo) (int, bool) {
+	value := reflect.ValueOf(info.Sys())
+	if !value.IsValid() {
+		return 0, false
+	}
+	if value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return 0, false
+		}
+		value = value.Elem()
+	}
+
+	uidField := value.FieldByName("Uid")
+	if !uidField.IsValid() {
+		return 0, false
+	}
+	if uidField.CanInt() {
+		uid := uidField.Int()
+		if uid < 0 || uid > int64(math.MaxInt) {
+			return 0, false
+		}
+		return int(uid), true
+	}
+	if uidField.CanUint() {
+		uid := uidField.Uint()
+		if uid > uint64(math.MaxInt) {
+			return 0, false
+		}
+		return int(uid), true
+	}
+
+	return 0, false
+}
+
+func verifyTempParentDirUnchanged(parentDir string, expected os.FileInfo) error {
+	current, err := os.Lstat(parentDir)
+	if err != nil {
+		return fmt.Errorf("failed to re-check parent directory %q: %w", parentDir, err)
+	}
+	if err := validateTempParentDirInfo(parentDir, current); err != nil {
+		return err
+	}
+	if !os.SameFile(expected, current) {
+		return fmt.Errorf(
+			"%w: parent directory %q changed while creating temporary directory",
+			ErrBundledTempParentInsecure,
+			parentDir,
+		)
+	}
+
+	return nil
 }
 
 func verifyBundledArchiveChecksum(archive []byte, expectedSHA256 string) error {
@@ -442,10 +601,16 @@ func buildChildProcessEnv(required []string) []string {
 		if !ok || key == "" {
 			continue
 		}
+		if isBlockedChildEnvKey(key) {
+			continue
+		}
 		add(key, value)
 	}
 
 	for _, key := range allowedParentEnvKeys {
+		if isBlockedChildEnvKey(key) {
+			continue
+		}
 		if _, exists := merged[key]; exists {
 			continue
 		}
@@ -460,4 +625,9 @@ func buildChildProcessEnv(required []string) []string {
 	}
 
 	return result
+}
+
+func isBlockedChildEnvKey(key string) bool {
+	_, blocked := blockedChildEnvKeys[strings.ToUpper(key)]
+	return blocked
 }
