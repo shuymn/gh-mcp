@@ -17,6 +17,7 @@ git clone https://github.com/shuymn/gh-mcp.git
 cd gh-mcp
 
 # Build the extension
+./scripts/prepare-bundled-mcp-server.sh
 go build -o gh-mcp .
 
 # Or use task
@@ -28,11 +29,14 @@ gh extension install .
 
 ### Updating Bundled github-mcp-server
 
-When bumping the bundled MCP server version, download and verify new release archives:
+When bumping the bundled MCP server version, refresh pinned metadata from the target release:
 
 ```bash
 ./scripts/update-bundled-mcp-server.sh v0.30.3
 ```
+
+This updates `mcp_version.go` and SHA256 constants in `bundle_*.go`.
+Release archives under `bundled/` are downloaded on demand and are gitignored.
 
 ## Development Workflow
 
@@ -49,6 +53,7 @@ task test:verbose
 task test:coverage
 
 # Or use go directly
+./scripts/prepare-bundled-mcp-server.sh
 go test -race ./...
 ```
 
@@ -78,7 +83,7 @@ gh-mcp/
 ├── auth_test.go      # Unit tests for auth
 ├── server.go         # Bundled github-mcp-server execution
 ├── server_test.go    # Unit tests for server helpers
-├── bundled/          # Bundled github-mcp-server release archives
+├── bundled/          # Downloaded github-mcp-server release archives (gitignored)
 ├── main_test.go      # Unit tests for main orchestration
 ├── .github/
 │   └── workflows/
