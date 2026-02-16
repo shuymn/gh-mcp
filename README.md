@@ -103,6 +103,16 @@ Press `Ctrl+C` to gracefully shut down the server.
 
 The extension passes through several environment variables to configure the MCP server:
 
+### Process Environment Trust Model
+
+`gh-mcp` starts `github-mcp-server` with a minimal child-process environment:
+
+- Required `GITHUB_*` variables are set by `gh-mcp`
+- Only a fixed allowlist from the parent process is forwarded (`PATH`, temp-dir vars, proxy/cert vars)
+- Known dangerous Node.js injection variables are blocked (`NODE_OPTIONS`, `NODE_EXTRA_CA_CERTS`, `NODE_PATH`)
+
+Proxy variables are intentionally forwarded to support enterprise networks. If you run `gh mcp` from an untrusted wrapper process, clear proxy/certificate variables before launch.
+
 ### Toolsets
 Control which GitHub API toolsets are available:
 
@@ -138,7 +148,7 @@ GITHUB_READ_ONLY=1 GITHUB_TOOLSETS="repos,issues" gh mcp
 ## How It Works
 
 1. The extension retrieves your GitHub credentials from your existing `gh` CLI authentication
-2. It extracts and runs a bundled `github-mcp-server` release binary for your platform
+2. It validates the bundled archive against a pinned SHA256 and extracts the `github-mcp-server` binary for your platform
 3. Your credentials are securely passed to the server process
 4. The temporary extracted binary is automatically removed when you exit
 
@@ -147,17 +157,31 @@ GITHUB_READ_ONLY=1 GITHUB_TOOLSETS="repos,issues" gh mcp
 ### "Not logged in to GitHub"
 Run `gh auth login` to authenticate with GitHub first.
 
+### "failed to get default host"
+No default GitHub host is configured in `gh`. Run `gh auth status` and authenticate/select a default account.
+
+### "no bundled github-mcp-server for platform"
+Your OS/architecture is not supported by bundled runtime assets. Check [Platform Support](#platform-support) and use a supported target.
+
 ### "Bundled binary checksum mismatch"
 The bundled binary did not pass integrity verification. Reinstall or upgrade the extension.
 
-### Server exits immediately
-Check your MCP client configuration and ensure your GitHub token/host is valid.
+### "bundled temp parent directory is insecure"
+The cache parent directory for extracted binaries failed ownership/permission checks. On Unix-like systems, ensure your user owns the cache path and that permissions are private (for example, `0700`).
+
+### "server exited with non-zero status: <code>"
+The bundled `github-mcp-server` started but returned an error. Check MCP client configuration and `GITHUB_*` environment values.
+
+### "invalid server environment value"
+One of the forwarded environment values contains a line break or NUL byte. Remove control characters from `GITHUB_*` values before running `gh mcp`.
 
 ## Security
 
 - Your GitHub token is never stored by this extension
 - Credentials are passed to the server process via environment variables
-- The bundled archive is verified with SHA256 before execution
+- Runtime integrity: bundled archives are verified with embedded SHA256 before execution
+- Supply-chain integrity: release update scripts verify GitHub release attestations before pinning SHA256 values in source
+- Trust model note: runtime does not re-run attestation checks; it relies on pinned hashes generated during release asset preparation
 - No data persists after the session ends
 
 ## Contributing
