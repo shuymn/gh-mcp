@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a GitHub CLI extension that runs the github-mcp-server in Docker using the user's existing `gh` authentication. It automates the process of retrieving GitHub credentials and launching the MCP server container with proper authentication.
+This is a GitHub CLI extension that runs the github-mcp-server as a bundled binary using the user's existing `gh` authentication. It automates the process of retrieving GitHub credentials and launching the MCP server process with proper authentication.
 
 ## Common Development Commands
 
@@ -67,16 +67,16 @@ The project consists of three main components:
    - Returns host and token for the authenticated user
    - Uses dependency injection for testability
 
-2. **Docker Management (`docker.go`)**:
-   - Creates Docker client with environment configuration
-   - Checks for and pulls the MCP server image if needed
-   - Creates and runs container with GitHub credentials as environment variables
-   - Manages bidirectional I/O streaming between terminal and container
+2. **Bundled Server Runtime (`server.go`)**:
+   - Selects and verifies bundled `github-mcp-server` archives
+   - Extracts the server binary for the current platform
+   - Runs `github-mcp-server stdio` with GitHub credentials as environment variables
+   - Manages bidirectional I/O streaming between terminal and server process
    - Handles graceful shutdown and cleanup
 
 3. **Main Orchestration (`main.go`)**:
    - Sets up signal handling for Ctrl+C
-   - Coordinates the authentication and Docker flow
+   - Coordinates the authentication and bundled server flow
    - Provides user feedback with emoji status messages
    - Uses dependency injection for testing
 
@@ -90,15 +90,15 @@ The project consists of three main components:
 
 When extending this CLI:
 
-1. **Dependency Injection**: All components use interfaces for external dependencies to enable unit testing without real API calls or Docker daemon.
+1. **Dependency Injection**: All components use interfaces for external dependencies to enable unit testing without real API calls or real server process execution.
 
-2. **Error Handling**: Errors bubble up with context, providing clear messages for users. Docker and auth errors include helpful suggestions.
+2. **Error Handling**: Errors bubble up with context, providing clear messages for users. Auth and server runtime errors include helpful suggestions.
 
-3. **I/O Streaming**: Container I/O uses goroutines for concurrent bidirectional streaming. Always handle EOF and connection closure properly.
+3. **I/O Streaming**: Server process I/O is wired directly to stdio. Handle context cancellation and process termination carefully.
 
 4. **Binary Naming**: The binary must be named `gh-mcp` to work as a GitHub CLI extension.
 
-5. **Testing**: Unit tests mock all external dependencies. No integration tests that would use real GitHub credentials or Docker daemon.
+5. **Testing**: Unit tests mock all external dependencies. No integration tests that would use real GitHub credentials or real server binaries.
 
 ## Release Process
 

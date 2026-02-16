@@ -7,7 +7,6 @@ Thank you for your interest in contributing to gh-mcp!
 ### Prerequisites
 
 - Go 1.21 or later
-- Docker (for testing)
 - Task (optional, for using Taskfile commands)
 
 ### Building from Source
@@ -25,6 +24,14 @@ task build
 
 # Install locally as a gh extension
 gh extension install .
+```
+
+### Updating Bundled github-mcp-server
+
+When bumping the bundled MCP server version, download and verify new release archives:
+
+```bash
+./scripts/update-bundled-mcp-server.sh v0.30.3
 ```
 
 ## Development Workflow
@@ -69,8 +76,9 @@ gh-mcp/
 ├── main.go           # Entry point and orchestration
 ├── auth.go           # GitHub authentication via gh CLI
 ├── auth_test.go      # Unit tests for auth
-├── docker.go         # Docker container management
-├── docker_test.go    # Unit tests for docker
+├── server.go         # Bundled github-mcp-server execution
+├── server_test.go    # Unit tests for server helpers
+├── bundled/          # Bundled github-mcp-server release archives
 ├── main_test.go      # Unit tests for main orchestration
 ├── .github/
 │   └── workflows/
@@ -93,23 +101,23 @@ The project consists of three main components:
    - Returns host and token for the authenticated user
    - Uses dependency injection for testability
 
-2. **Docker Management (`docker.go`)**:
-   - Creates Docker client with environment configuration
-   - Checks for and pulls the MCP server image if needed
-   - Creates and runs container with GitHub credentials as environment variables
-   - Manages bidirectional I/O streaming between terminal and container
-   - Handles graceful shutdown and cleanup
+2. **Bundled Server Runtime (`server.go`)**:
+   - Selects the bundled `github-mcp-server` archive for the current platform
+   - Verifies archive integrity with pinned SHA256
+   - Extracts and executes `github-mcp-server stdio`
+   - Streams stdin/stdout/stderr directly to/from the server process
+   - Handles graceful shutdown and cleanup of temporary extracted files
 
 3. **Main Orchestration (`main.go`)**:
    - Sets up signal handling for Ctrl+C
-   - Coordinates the authentication and Docker flow
+   - Coordinates the authentication and bundled-server execution flow
    - Provides user feedback with emoji status messages
    - Uses dependency injection for testing
 
 ## Testing Guidelines
 
 - All components use interfaces for external dependencies to enable unit testing
-- Mock all external dependencies (GitHub API, Docker daemon)
+- Mock all external dependencies (GitHub auth and server runner)
 - Use table-driven tests where appropriate
 - Ensure tests are deterministic and fast
 
