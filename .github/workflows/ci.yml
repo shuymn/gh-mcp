@@ -15,6 +15,9 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
 
     steps:
     - name: Check if tagpr branch
@@ -32,6 +35,8 @@ jobs:
     - name: Checkout code
       if: steps.check-branch.outputs.skip != 'true'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
 
     - name: Set up Go
       if: steps.check-branch.outputs.skip != 'true'
@@ -74,6 +79,11 @@ jobs:
   test:
     name: Test (${{ matrix.os }})
     needs: lint
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
@@ -96,6 +106,8 @@ jobs:
     - name: Checkout code
       if: steps.check-branch.outputs.skip != 'true'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
 
     - name: Set up Go
       if: steps.check-branch.outputs.skip != 'true'
@@ -146,6 +158,9 @@ jobs:
     name: Build
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
 
     steps:
     - name: Check if tagpr branch
@@ -163,6 +178,8 @@ jobs:
     - name: Checkout code
       if: steps.check-branch.outputs.skip != 'true'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
 
     - name: Set up Go
       if: steps.check-branch.outputs.skip != 'true'
