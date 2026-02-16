@@ -32,6 +32,11 @@ linters:
       - std-error-handling
       - common-false-positives
       - legacy
+    rules:
+      - linters:
+          - err113
+          - noctx
+        path: _test\.go
 formatters:
   enable:
     - gci
