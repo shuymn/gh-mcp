@@ -14,20 +14,32 @@ permissions:
 jobs:
   lint:
     name: Lint
-    if: ${{ !startsWith(github.head_ref || github.ref_name, 'tagpr-from-v') }}
     runs-on: ubuntu-latest
 
     steps:
+    - name: Check if tagpr branch
+      id: check-branch
+      shell: pwsh
+      run: |
+        if ("${{ github.head_ref || github.ref_name }}" -like "tagpr-from-v*") {
+          "skip=true" >> $env:GITHUB_OUTPUT
+        } else {
+          "skip=false" >> $env:GITHUB_OUTPUT
+        }
+
     - name: Checkout code
+      if: steps.check-branch.outputs.skip != 'true'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
     - name: Set up Go
+      if: steps.check-branch.outputs.skip != 'true'
       uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
       with:
         go-version: stable
         cache: true
 
     - name: Restore bundled assets cache
+      if: steps.check-branch.outputs.skip != 'true'
       id: bundled-cache
       uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
@@ -36,19 +48,22 @@ jobs:
         enableCrossOsArchive: true
 
     - name: Prepare bundled assets
-      if: steps.bundled-cache.outputs.cache-hit != 'true'
+      if: steps.check-branch.outputs.skip != 'true' && steps.bundled-cache.outputs.cache-hit != 'true'
       run: go run ./scripts/prepare
       env:
         GH_TOKEN: ${{ github.token }}
 
     - name: Verify bundled assets
+      if: steps.check-branch.outputs.skip != 'true'
       run: go run ./scripts/prepare -check
 
     - name: Set golangci-lint version
+      if: steps.check-branch.outputs.skip != 'true'
       id: set-golangci-lint-version
       run: echo "version=$(yq '.vars.GOLANGCI_LINT_VERSION' Taskfile.yml)" >> $GITHUB_OUTPUT
 
     - name: Run golangci-lint
+      if: steps.check-branch.outputs.skip != 'true'
       uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
       with:
         version: ${{ steps.set-golangci-lint-version.outputs.version }}
@@ -57,7 +72,6 @@ jobs:
   test:
     name: Test (${{ matrix.os }})
     needs: lint
-    if: ${{ !startsWith(github.head_ref || github.ref_name, 'tagpr-from-v') }}
     strategy:
       fail-fast: false
       matrix:
@@ -65,16 +79,29 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+    - name: Check if tagpr branch
+      id: check-branch
+      shell: pwsh
+      run: |
+        if ("${{ github.head_ref || github.ref_name }}" -like "tagpr-from-v*") {
+          "skip=true" >> $env:GITHUB_OUTPUT
+        } else {
+          "skip=false" >> $env:GITHUB_OUTPUT
+        }
+
     - name: Checkout code
+      if: steps.check-branch.outputs.skip != 'true'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
     - name: Set up Go
+      if: steps.check-branch.outputs.skip != 'true'
       uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
       with:
         go-version: stable
         cache: true
 
     - name: Restore bundled assets cache
+      if: steps.check-branch.outputs.skip != 'true'
       id: bundled-cache
       uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
@@ -83,47 +110,63 @@ jobs:
         enableCrossOsArchive: true
 
     - name: Prepare bundled assets
-      if: steps.bundled-cache.outputs.cache-hit != 'true'
+      if: steps.check-branch.outputs.skip != 'true' && steps.bundled-cache.outputs.cache-hit != 'true'
       run: go run ./scripts/prepare
       env:
         GH_TOKEN: ${{ github.token }}
 
     - name: Verify bundled assets
+      if: steps.check-branch.outputs.skip != 'true'
       run: go run ./scripts/prepare -check
 
     - name: Download dependencies
+      if: steps.check-branch.outputs.skip != 'true'
       run: go mod download
 
     - name: Verify dependencies
+      if: steps.check-branch.outputs.skip != 'true'
       run: go mod verify
 
     - name: Run tests
+      if: steps.check-branch.outputs.skip != 'true'
       run: go test -race -shuffle=on -count=10 ./...
 
     - name: Run tests with coverage
-      if: matrix.os == 'ubuntu-latest'
+      if: steps.check-branch.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
       run: go test -race -coverprofile=coverage.out ./...
 
     - uses: k1LoW/octocov-action@73d561f65d59e66899ed5c87e4621a913b5d5c20 # v1.5.0
-      if: matrix.os == 'ubuntu-latest'
+      if: steps.check-branch.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
 
   build:
     name: Build
     needs: test
-    if: ${{ !startsWith(github.head_ref || github.ref_name, 'tagpr-from-v') }}
     runs-on: ubuntu-latest
 
     steps:
+    - name: Check if tagpr branch
+      id: check-branch
+      shell: pwsh
+      run: |
+        if ("${{ github.head_ref || github.ref_name }}" -like "tagpr-from-v*") {
+          "skip=true" >> $env:GITHUB_OUTPUT
+        } else {
+          "skip=false" >> $env:GITHUB_OUTPUT
+        }
+
     - name: Checkout code
+      if: steps.check-branch.outputs.skip != 'true'
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
     - name: Set up Go
+      if: steps.check-branch.outputs.skip != 'true'
       uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
       with:
         go-version: stable
         cache: true
 
     - name: Restore bundled assets cache
+      if: steps.check-branch.outputs.skip != 'true'
       id: bundled-cache
       uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
@@ -132,24 +175,28 @@ jobs:
         enableCrossOsArchive: true
 
     - name: Prepare bundled assets
-      if: steps.bundled-cache.outputs.cache-hit != 'true'
+      if: steps.check-branch.outputs.skip != 'true' && steps.bundled-cache.outputs.cache-hit != 'true'
       run: go run ./scripts/prepare
       env:
         GH_TOKEN: ${{ github.token }}
 
     - name: Verify bundled assets
+      if: steps.check-branch.outputs.skip != 'true'
       run: go run ./scripts/prepare -check
 
     - name: Build binary
+      if: steps.check-branch.outputs.skip != 'true'
       run: go build -o gh-mcp .
 
     - name: Test binary exists and is executable
+      if: steps.check-branch.outputs.skip != 'true'
       run: |
         test -f gh-mcp
         test -x gh-mcp
         ./gh-mcp --version || true
 
     - name: Upload artifact
+      if: steps.check-branch.outputs.skip != 'true'
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
       with:
         name: gh-mcp-linux-amd64
