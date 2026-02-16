@@ -283,11 +283,11 @@ func TestCreateTempDirWithFallback(t *testing.T) {
 
 	validParent := filepath.Join(root, "cache")
 
-	tmpDir, err := createTempDirWithFallback([]string{invalidParent, validParent})
+	tmpDir, cleanup, err := createTempDirWithFallback([]string{invalidParent, validParent})
 	if err != nil {
 		t.Fatalf("createTempDirWithFallback returned error: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer cleanup()
 
 	if !strings.HasPrefix(tmpDir, validParent+string(filepath.Separator)) {
 		t.Fatalf("expected temp dir under %q, got %q", validParent, tmpDir)
@@ -310,7 +310,8 @@ func TestCreateTempDirRejectsSymlinkParent(t *testing.T) {
 		t.Skipf("failed to create symlink parent on this platform: %v", err)
 	}
 
-	_, err := createTempDir(symlinkParent)
+	_, cleanup, err := createTempDir(symlinkParent)
+	defer cleanup()
 	if err == nil {
 		t.Fatal("expected createTempDir to reject symlink parent")
 	}

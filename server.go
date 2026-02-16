@@ -39,7 +39,8 @@ var (
 	// ErrBundledExecutableInvalidSize is returned when archive metadata reports an invalid executable size.
 	ErrBundledExecutableInvalidSize = errors.New("bundled executable has invalid size")
 	// ErrBundledTempParentInsecure is returned when the temp parent directory fails safety checks.
-	ErrBundledTempParentInsecure = errors.New("bundled temp parent directory is insecure")
+	ErrBundledTempParentInsecure     = errors.New("bundled temp parent directory is insecure")
+	errBundledTempParentStateInvalid = errors.New("bundled temp parent directory state is invalid")
 )
 
 const (
@@ -176,12 +177,9 @@ func materializeBundledServerBinary() (string, func(), error) {
 		return "", func() {}, err
 	}
 
-	tmpDir, err := createTempDirWithFallback(bundledServerTempParentDirs())
+	tmpDir, cleanup, err := createTempDirWithFallback(bundledServerTempParentDirs())
 	if err != nil {
 		return "", func() {}, err
-	}
-	cleanup := func() {
-		_ = os.RemoveAll(tmpDir)
 	}
 
 	binaryPath := filepath.Join(tmpDir, bundledMCPExecutableName)
@@ -239,7 +237,7 @@ func (s *tempParentDirState) close() {
 	_ = s.handle.Close()
 }
 
-func createTempDirWithFallback(parentDirs []string) (string, error) {
+func createTempDirWithFallback(parentDirs []string) (string, func(), error) {
 	if len(parentDirs) == 0 {
 		parentDirs = []string{""}
 	}
@@ -247,43 +245,57 @@ func createTempDirWithFallback(parentDirs []string) (string, error) {
 	attemptErrs := make([]error, 0, len(parentDirs))
 
 	for _, parentDir := range parentDirs {
-		tmpDir, err := createTempDir(parentDir)
+		tmpDir, cleanup, err := createTempDir(parentDir)
 		if err == nil {
-			return tmpDir, nil
+			return tmpDir, cleanup, nil
 		}
 		attemptErrs = append(attemptErrs, err)
 	}
 
-	return "", fmt.Errorf("failed to create temporary directory: %w", errors.Join(attemptErrs...))
+	return "", func() {}, fmt.Errorf(
+		"failed to create temporary directory: %w",
+		errors.Join(attemptErrs...),
+	)
 }
 
-func createTempDir(parentDir string) (string, error) {
-	var parentState *tempParentDirState
-	var err error
-
-	if parentDir != "" {
-		parentState, err = ensureSecureTempParentDir(parentDir)
+func createTempDir(parentDir string) (string, func(), error) {
+	if parentDir == "" {
+		tmpDir, err := os.MkdirTemp("", "gh-mcp-server-*")
 		if err != nil {
-			return "", err
+			return "", func() {}, fmt.Errorf(
+				"failed to create temporary directory in system temp: %w",
+				err,
+			)
 		}
-		defer parentState.close()
-	}
 
-	tmpDir, err := os.MkdirTemp(parentDir, "gh-mcp-server-*")
-	if err != nil {
-		if parentDir == "" {
-			return "", fmt.Errorf("failed to create temporary directory in system temp: %w", err)
-		}
-		return "", fmt.Errorf("failed to create temporary directory in %q: %w", parentDir, err)
-	}
-	if parentDir != "" {
-		if err := verifyTempParentDirUnchanged(parentDir, parentState); err != nil {
+		cleanup := func() {
 			_ = os.RemoveAll(tmpDir)
-			return "", err
 		}
+		return tmpDir, cleanup, nil
 	}
 
-	return tmpDir, nil
+	parentState, err := ensureSecureTempParentDir(parentDir)
+	if err != nil {
+		return "", func() {}, err
+	}
+
+	tmpDir, err := createTempDirInVerifiedParent(parentDir, parentState)
+	if err != nil {
+		parentState.close()
+		return "", func() {}, err
+	}
+
+	cleanup := func() {
+		defer parentState.close()
+
+		// Avoid deleting attacker-controlled paths if the parent changed.
+		if err := verifyTempParentDirUnchanged(parentDir, parentState); err != nil {
+			return
+		}
+		_ = os.RemoveAll(tmpDir)
+	}
+
+	return tmpDir, cleanup, nil
 }
 
 func ensureSecureTempParentDir(parentDir string) (*tempParentDirState, error) {
@@ -297,13 +309,6 @@ func ensureSecureTempParentDir(parentDir string) (*tempParentDirState, error) {
 	}
 	if err := validateTempParentDirInfo(parentDir, info); err != nil {
 		return nil, err
-	}
-
-	if runtime.GOOS != "windows" {
-		info, err = ensureSecureUnixTempParentDir(parentDir, info)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	state := &tempParentDirState{info: info}
@@ -342,13 +347,45 @@ func ensureSecureTempParentDir(parentDir string) (*tempParentDirState, error) {
 		)
 	}
 
-	state.info = handleInfo
+	tightenedInfo, err := ensureSecureUnixTempParentDir(parentDir, handle, handleInfo)
+	if err != nil {
+		_ = handle.Close()
+		return nil, err
+	}
+
+	latestPathInfo, err := os.Lstat(parentDir)
+	if err != nil {
+		_ = handle.Close()
+		return nil, fmt.Errorf(
+			"failed to stat parent directory %q after permissions check: %w",
+			parentDir,
+			err,
+		)
+	}
+	if err := validateTempParentDirInfo(parentDir, latestPathInfo); err != nil {
+		_ = handle.Close()
+		return nil, err
+	}
+	if !os.SameFile(tightenedInfo, latestPathInfo) {
+		_ = handle.Close()
+		return nil, fmt.Errorf(
+			"%w: parent directory %q changed while preparing temporary directory",
+			ErrBundledTempParentInsecure,
+			parentDir,
+		)
+	}
+
+	state.info = tightenedInfo
 	state.handle = handle
 
 	return state, nil
 }
 
-func ensureSecureUnixTempParentDir(parentDir string, info os.FileInfo) (os.FileInfo, error) {
+func ensureSecureUnixTempParentDir(
+	parentDir string,
+	handle *os.File,
+	info os.FileInfo,
+) (os.FileInfo, error) {
 	if uid, ok := fileInfoUID(info); ok && uid != os.Geteuid() {
 		return nil, fmt.Errorf(
 			"%w: parent directory %q must be owned by the current user",
@@ -361,7 +398,7 @@ func ensureSecureUnixTempParentDir(parentDir string, info os.FileInfo) (os.FileI
 		return info, nil
 	}
 
-	if err := os.Chmod(parentDir, 0o700); err != nil {
+	if err := handle.Chmod(0o700); err != nil {
 		return nil, fmt.Errorf(
 			"failed to tighten parent directory %q permissions: %w",
 			parentDir,
@@ -369,10 +406,10 @@ func ensureSecureUnixTempParentDir(parentDir string, info os.FileInfo) (os.FileI
 		)
 	}
 
-	tightenedInfo, err := os.Lstat(parentDir)
+	tightenedInfo, err := handle.Stat()
 	if err != nil {
 		return nil, fmt.Errorf(
-			"failed to stat parent directory %q after chmod: %w",
+			"failed to stat opened parent directory %q after chmod: %w",
 			parentDir,
 			err,
 		)
@@ -447,7 +484,11 @@ func fileInfoUID(info os.FileInfo) (int, bool) {
 
 func verifyTempParentDirUnchanged(parentDir string, expected *tempParentDirState) error {
 	if expected == nil || expected.info == nil {
-		return fmt.Errorf("missing expected parent directory state for %q", parentDir)
+		return fmt.Errorf(
+			"%w: missing expected parent directory state for %q",
+			errBundledTempParentStateInvalid,
+			parentDir,
+		)
 	}
 
 	current, err := os.Lstat(parentDir)

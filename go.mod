@@ -4,7 +4,10 @@ go 1.25.0
 
 toolchain go1.26.0
 
-require github.com/cli/go-gh/v2 v2.13.0
+require (
+	github.com/cli/go-gh/v2 v2.13.0
+	golang.org/x/sys v0.41.0
+)
 
 require (
 	github.com/cli/safeexec v1.0.1 // indirect
