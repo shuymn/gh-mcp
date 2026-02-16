@@ -37,6 +37,10 @@ jobs:
         go-version: stable
         cache: true
 
+    - name: Prepare bundled assets
+      if: steps.check-branch.outputs.skip != 'true'
+      run: ./scripts/prepare-bundled-mcp-server.sh
+
     - name: Set golangci-lint version
       id: set-golangci-lint-version
       if: steps.check-branch.outputs.skip != 'true'
@@ -74,6 +78,10 @@ jobs:
       with:
         go-version: stable
         cache: true
+
+    - name: Prepare bundled assets
+      if: steps.check-branch.outputs.skip != 'true'
+      run: ./scripts/prepare-bundled-mcp-server.sh
 
     - name: Install Task
       uses: arduino/setup-task@b91d5d2c96a56797b48ac1e0e89220bf64044611 # v2.0.0
@@ -125,6 +133,10 @@ jobs:
       with:
         go-version: stable
         cache: true
+
+    - name: Prepare bundled assets
+      if: steps.check-branch.outputs.skip != 'true'
+      run: ./scripts/prepare-bundled-mcp-server.sh
 
     - name: Install Task
       uses: arduino/setup-task@b91d5d2c96a56797b48ac1e0e89220bf64044611 # v2.0.0
