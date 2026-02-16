@@ -27,7 +27,7 @@ SHA_TARGETS=(
   "bundle_windows_amd64.go:github-mcp-server_Windows_x86_64.zip"
 )
 
-"${SCRIPT_DIR}/prepare-bundled-mcp-server.sh" "${VERSION}"
+go run ./scripts/prepare "${VERSION}"
 
 perl -i -pe "s/^const mcpServerVersion = \".*\"$/const mcpServerVersion = \"${VERSION}\"/" mcp_version.go
 

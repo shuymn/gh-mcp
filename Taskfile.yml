@@ -53,7 +53,7 @@ tasks:
           test "${actual}" = "${expected}" || exit 1
         done
     cmds:
-      - ./scripts/prepare-bundled-mcp-server.sh
+      - go run ./scripts/prepare
 
   build:
     desc: Build the binary

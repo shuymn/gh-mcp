@@ -39,7 +39,7 @@ jobs:
 
     - name: Prepare bundled assets
       if: steps.check-branch.outputs.skip != 'true'
-      run: ./scripts/prepare-bundled-mcp-server.sh
+      run: go run ./scripts/prepare
       env:
         GH_TOKEN: ${{ github.token }}
 
@@ -83,7 +83,7 @@ jobs:
 
     - name: Prepare bundled assets
       if: steps.check-branch.outputs.skip != 'true'
-      run: ./scripts/prepare-bundled-mcp-server.sh
+      run: go run ./scripts/prepare
       env:
         GH_TOKEN: ${{ github.token }}
 
@@ -140,7 +140,7 @@ jobs:
 
     - name: Prepare bundled assets
       if: steps.check-branch.outputs.skip != 'true'
-      run: ./scripts/prepare-bundled-mcp-server.sh
+      run: go run ./scripts/prepare
       env:
         GH_TOKEN: ${{ github.token }}
 

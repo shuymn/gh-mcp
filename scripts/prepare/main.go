@@ -1,0 +1,425 @@
+package main
+
+import (
+	"bufio"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/cli/go-gh/v2"
+)
+
+const (
+	upstreamRepository           = "github/github-mcp-server"
+	bundledDirName               = "bundled"
+	mcpVersionFileName           = "mcp_version.go"
+	defaultDownloadRetryCount    = 3
+	defaultDownloadRetryDelaySec = 2
+	submatchWithWholeMatchCount  = 2
+	checksumLineFieldCount       = 2
+)
+
+var (
+	errUsage             = errors.New("usage: prepare [github-mcp-server version (e.g. v0.30.3)]")
+	errGHNotInstalled    = errors.New("gh CLI is required but not installed")
+	errInvalidRetryCount = errors.New("DOWNLOAD_RETRY_COUNT must be a positive integer")
+	errInvalidRetryDelay = errors.New("DOWNLOAD_RETRY_DELAY_SECONDS must be a positive integer")
+	errParseMCPVersion   = errors.New("failed to parse mcpServerVersion")
+	errGHAuthRequired    = errors.New("gh authentication is required")
+	errContextDone       = errors.New("prepare interrupted")
+	errGHCommandFailed   = errors.New("gh command failed")
+	errChecksumNotFound  = errors.New("asset checksum not found")
+	errChecksumMismatch  = errors.New("asset checksum mismatch")
+	mcpVersionPattern    = regexp.MustCompile(`^const mcpServerVersion = "(v[^"]+)"$`)
+	assets               = []string{
+		"github-mcp-server_Darwin_arm64.tar.gz",
+		"github-mcp-server_Darwin_x86_64.tar.gz",
+		"github-mcp-server_Linux_i386.tar.gz",
+		"github-mcp-server_Linux_arm64.tar.gz",
+		"github-mcp-server_Linux_x86_64.tar.gz",
+		"github-mcp-server_Windows_arm64.zip",
+		"github-mcp-server_Windows_i386.zip",
+		"github-mcp-server_Windows_x86_64.zip",
+	}
+)
+
+func main() {
+	if err := run(context.Background(), os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context, args []string) error {
+	version, err := resolveVersion(args)
+	if err != nil {
+		return err
+	}
+
+	retryCount, err := positiveIntFromEnv(
+		"DOWNLOAD_RETRY_COUNT",
+		defaultDownloadRetryCount,
+		errInvalidRetryCount,
+	)
+	if err != nil {
+		return err
+	}
+	retryDelaySec, err := positiveIntFromEnv(
+		"DOWNLOAD_RETRY_DELAY_SECONDS",
+		defaultDownloadRetryDelaySec,
+		errInvalidRetryDelay,
+	)
+	if err != nil {
+		return err
+	}
+	retryDelay := time.Duration(retryDelaySec) * time.Second
+
+	if _, err := gh.Path(); err != nil {
+		return fmt.Errorf("%w: %w", errGHNotInstalled, err)
+	}
+
+	if err := ensureGHAuth(ctx); err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(bundledDirName, 0o755); err != nil {
+		return fmt.Errorf("failed to create bundled directory %q: %w", bundledDirName, err)
+	}
+
+	stagingDir, err := os.MkdirTemp(bundledDirName, ".prepare-bundled-mcp-server.")
+	if err != nil {
+		return fmt.Errorf("failed to create staging directory: %w", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(stagingDir)
+	}()
+
+	checksumsAsset := fmt.Sprintf(
+		"github-mcp-server_%s_checksums.txt",
+		strings.TrimPrefix(version, "v"),
+	)
+	checksumsFile := filepath.Join(stagingDir, checksumsAsset)
+
+	fmt.Printf("Downloading checksums for %s...\n", version)
+	if err := runWithRetry(
+		ctx,
+		retryCount,
+		retryDelay,
+		"download "+checksumsAsset,
+		func() error {
+			return downloadReleaseAsset(ctx, version, checksumsAsset, stagingDir)
+		},
+	); err != nil {
+		return err
+	}
+
+	fmt.Printf("Verifying attestation for %s...\n", checksumsAsset)
+	if err := runWithRetry(
+		ctx,
+		retryCount,
+		retryDelay,
+		"verify attestation for "+checksumsAsset,
+		func() error {
+			return verifyReleaseAssetAttestation(ctx, version, checksumsFile)
+		},
+	); err != nil {
+		return err
+	}
+
+	checksums, err := loadChecksums(checksumsFile)
+	if err != nil {
+		return err
+	}
+
+	for _, asset := range assets {
+		fmt.Printf("Downloading %s...\n", asset)
+		if err := runWithRetry(
+			ctx,
+			retryCount,
+			retryDelay,
+			"download "+asset,
+			func() error {
+				return downloadReleaseAsset(ctx, version, asset, stagingDir)
+			},
+		); err != nil {
+			return err
+		}
+
+		filePath := filepath.Join(stagingDir, asset)
+		if err := verifyAssetChecksum(checksums, asset, filePath, checksumsFile); err != nil {
+			return err
+		}
+	}
+
+	for _, asset := range assets {
+		if err := promoteStagedAsset(stagingDir, bundledDirName, asset); err != nil {
+			return err
+		}
+	}
+	if err := promoteStagedAsset(stagingDir, bundledDirName, checksumsAsset); err != nil {
+		return err
+	}
+
+	fmt.Printf("Bundled assets prepared for %s.\n", version)
+
+	return nil
+}
+
+func resolveVersion(args []string) (string, error) {
+	switch len(args) {
+	case 0:
+		content, err := os.ReadFile(mcpVersionFileName)
+		if err != nil {
+			return "", fmt.Errorf("failed to read %s: %w", mcpVersionFileName, err)
+		}
+
+		version, err := parseMCPServerVersion(content)
+		if err != nil {
+			return "", err
+		}
+
+		return version, nil
+	case 1:
+		return args[0], nil
+	default:
+		return "", errUsage
+	}
+}
+
+func parseMCPServerVersion(content []byte) (string, error) {
+	scanner := bufio.NewScanner(strings.NewReader(string(content)))
+	for scanner.Scan() {
+		matches := mcpVersionPattern.FindStringSubmatch(strings.TrimSpace(scanner.Text()))
+		if len(matches) == submatchWithWholeMatchCount {
+			return matches[1], nil
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("failed reading %s: %w", mcpVersionFileName, err)
+	}
+
+	return "", fmt.Errorf("%w from %s", errParseMCPVersion, mcpVersionFileName)
+}
+
+func positiveIntFromEnv(key string, defaultValue int, invalidValueErr error) (int, error) {
+	rawValue := strings.TrimSpace(os.Getenv(key))
+	if rawValue == "" {
+		return defaultValue, nil
+	}
+
+	value, err := strconv.Atoi(rawValue)
+	if err != nil || value <= 0 {
+		return 0, invalidValueErr
+	}
+
+	return value, nil
+}
+
+func ensureGHAuth(ctx context.Context) error {
+	if os.Getenv("GH_TOKEN") != "" || os.Getenv("GITHUB_TOKEN") != "" {
+		return nil
+	}
+
+	if err := runGHCommand(ctx, io.Discard, io.Discard, "auth", "status"); err == nil {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"%w: run 'gh auth login' locally, or set GH_TOKEN (or GITHUB_TOKEN) in CI",
+		errGHAuthRequired,
+	)
+}
+
+func runWithRetry(
+	ctx context.Context,
+	retryCount int,
+	retryDelay time.Duration,
+	description string,
+	fn func() error,
+) error {
+	var lastErr error
+
+	for attempt := range retryCount {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("%w: %w", errContextDone, err)
+		}
+
+		err := fn()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+
+		if attempt+1 >= retryCount {
+			break
+		}
+
+		fmt.Printf(
+			"Retrying: %s (%d/%d) in %ds...\n",
+			description,
+			attempt+1,
+			retryCount,
+			int(retryDelay.Seconds()),
+		)
+
+		timer := time.NewTimer(retryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return fmt.Errorf("%w: %w", errContextDone, ctx.Err())
+		case <-timer.C:
+		}
+	}
+
+	return fmt.Errorf("failed: %s (attempts=%d): %w", description, retryCount, lastErr)
+}
+
+func downloadReleaseAsset(
+	ctx context.Context,
+	version string,
+	assetName string,
+	outputDir string,
+) error {
+	return runGHCommand(
+		ctx,
+		os.Stdout,
+		os.Stderr,
+		"release",
+		"download",
+		version,
+		"--repo",
+		upstreamRepository,
+		"--pattern",
+		assetName,
+		"--dir",
+		outputDir,
+		"--clobber",
+	)
+}
+
+func verifyReleaseAssetAttestation(ctx context.Context, version, checksumsFile string) error {
+	return runGHCommand(
+		ctx,
+		io.Discard,
+		os.Stderr,
+		"release",
+		"verify-asset",
+		version,
+		checksumsFile,
+		"--repo",
+		upstreamRepository,
+	)
+}
+
+func runGHCommand(ctx context.Context, stdout io.Writer, stderr io.Writer, args ...string) error {
+	stdoutBuffer, stderrBuffer, err := gh.ExecContext(ctx, args...)
+
+	if _, writeErr := stdout.Write(stdoutBuffer.Bytes()); writeErr != nil {
+		return fmt.Errorf("failed to write gh stdout: %w", writeErr)
+	}
+	if _, writeErr := stderr.Write(stderrBuffer.Bytes()); writeErr != nil {
+		return fmt.Errorf("failed to write gh stderr: %w", writeErr)
+	}
+
+	if err != nil {
+		return fmt.Errorf("%w: gh %s: %w", errGHCommandFailed, strings.Join(args, " "), err)
+	}
+
+	return nil
+}
+
+func loadChecksums(checksumsFile string) (map[string]string, error) {
+	file, err := os.Open(checksumsFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read checksums file %q: %w", checksumsFile, err)
+	}
+	defer file.Close()
+
+	checksums := make(map[string]string)
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) < checksumLineFieldCount {
+			continue
+		}
+		checksums[fields[1]] = fields[0]
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("failed reading checksums file %q: %w", checksumsFile, err)
+	}
+
+	return checksums, nil
+}
+
+func verifyAssetChecksum(
+	checksums map[string]string,
+	assetName string,
+	filePath string,
+	checksumsFile string,
+) error {
+	expected, ok := checksums[assetName]
+	if !ok {
+		return fmt.Errorf(
+			"%w: asset=%s checksums=%s",
+			errChecksumNotFound,
+			assetName,
+			checksumsFile,
+		)
+	}
+
+	actual, err := sha256File(filePath)
+	if err != nil {
+		return err
+	}
+	if actual != expected {
+		return fmt.Errorf(
+			"%w: asset=%s expected=%s actual=%s",
+			errChecksumMismatch,
+			assetName,
+			expected,
+			actual,
+		)
+	}
+
+	return nil
+}
+
+func sha256File(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open %s: %w", filePath, err)
+	}
+	defer file.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", fmt.Errorf("failed to hash %s: %w", filePath, err)
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+func promoteStagedAsset(stagingDir string, bundledDir string, assetName string) error {
+	src := filepath.Join(stagingDir, assetName)
+	dst := filepath.Join(bundledDir, assetName)
+
+	// Keep explicit remove for Windows where Rename does not replace existing files.
+	if err := os.Remove(dst); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("failed to remove existing asset %s: %w", dst, err)
+	}
+
+	if err := os.Rename(src, dst); err != nil {
+		return fmt.Errorf("failed to promote %s to %s: %w", src, dst, err)
+	}
+
+	return nil
+}
