@@ -7,8 +7,8 @@ if [[ $# -gt 1 ]]; then
   exit 1
 fi
 
-if ! command -v jq >/dev/null 2>&1; then
-  echo "jq is required but not installed."
+if ! command -v gh >/dev/null 2>&1; then
+  echo "gh CLI is required but not installed."
   exit 1
 fi
 
@@ -26,8 +26,8 @@ if [[ -z "${VERSION}" ]]; then
 fi
 
 VERSION_NO_V="${VERSION#v}"
-BASE_URL="https://github.com/github/github-mcp-server/releases/download/${VERSION}"
-API_URL="https://api.github.com/repos/github/github-mcp-server/releases/tags/${VERSION}"
+UPSTREAM_REPOSITORY="github/github-mcp-server"
+API_ENDPOINT="/repos/${UPSTREAM_REPOSITORY}/releases/tags/${VERSION}"
 BUNDLED_DIR="bundled"
 CHECKSUMS_FILE="${BUNDLED_DIR}/github-mcp-server_${VERSION_NO_V}_checksums.txt"
 CHECKSUMS_ASSET="github-mcp-server_${VERSION_NO_V}_checksums.txt"
@@ -42,6 +42,20 @@ ASSETS=(
   "github-mcp-server_Windows_i386.zip"
   "github-mcp-server_Windows_x86_64.zip"
 )
+
+ensure_gh_auth() {
+  if [[ -n "${GH_TOKEN:-}" || -n "${GITHUB_TOKEN:-}" ]]; then
+    return
+  fi
+
+  if gh auth status >/dev/null 2>&1; then
+    return
+  fi
+
+  echo "gh authentication is required."
+  echo "Run 'gh auth login' locally, or set GH_TOKEN (or GITHUB_TOKEN) in CI."
+  exit 1
+}
 
 sha256_file() {
   local file_path="$1"
@@ -59,14 +73,41 @@ sha256_file() {
   exit 1
 }
 
+download_release_asset() {
+  local asset_name="$1"
+
+  gh release download "${VERSION}" \
+    --repo "${UPSTREAM_REPOSITORY}" \
+    --pattern "${asset_name}" \
+    --dir "${BUNDLED_DIR}" \
+    --clobber
+}
+
+ensure_gh_auth
 mkdir -p "${BUNDLED_DIR}"
 
 echo "Loading release metadata for ${VERSION}..."
-RELEASE_METADATA_JSON="$(curl -fsSL "${API_URL}")"
+RELEASE_ASSETS_TSV="$(gh api \
+  -H "Accept: application/vnd.github+json" \
+  "${API_ENDPOINT}" \
+  --jq '.assets[] | [.name, .digest] | @tsv')"
+
+if [[ -z "${RELEASE_ASSETS_TSV}" ]]; then
+  echo "failed to load release metadata for ${VERSION}"
+  exit 1
+fi
 
 release_asset_digest() {
   local asset_name="$1"
-  jq -er --arg name "${asset_name}" '.assets[] | select(.name == $name) | .digest' <<<"${RELEASE_METADATA_JSON}"
+  local digest
+  digest="$(awk -F $'\t' -v name="${asset_name}" '$1==name {print $2; exit}' <<<"${RELEASE_ASSETS_TSV}")"
+
+  if [[ -z "${digest}" ]]; then
+    echo "Failed to find ${asset_name} in release metadata"
+    exit 1
+  fi
+
+  printf '%s\n' "${digest}"
 }
 
 verify_asset_against_release_metadata() {
@@ -94,12 +135,12 @@ verify_asset_against_release_metadata() {
 }
 
 echo "Downloading checksums for ${VERSION}..."
-curl -fsSL "${BASE_URL}/${CHECKSUMS_ASSET}" -o "${CHECKSUMS_FILE}"
+download_release_asset "${CHECKSUMS_ASSET}"
 verify_asset_against_release_metadata "${CHECKSUMS_ASSET}" "${CHECKSUMS_FILE}"
 
 for asset in "${ASSETS[@]}"; do
   echo "Downloading ${asset}..."
-  curl -fsSL "${BASE_URL}/${asset}" -o "${BUNDLED_DIR}/${asset}"
+  download_release_asset "${asset}"
   verify_asset_against_release_metadata "${asset}" "${BUNDLED_DIR}/${asset}"
 done
 
