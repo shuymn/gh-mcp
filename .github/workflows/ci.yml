@@ -20,8 +20,10 @@ jobs:
     - name: Check if tagpr branch
       id: check-branch
       shell: pwsh
+      env:
+        BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       run: |
-        if ("${{ github.head_ref || github.ref_name }}" -like "tagpr-from-v*") {
+        if ("$env:BRANCH_NAME" -like "tagpr-from-v*") {
           "skip=true" >> $env:GITHUB_OUTPUT
         } else {
           "skip=false" >> $env:GITHUB_OUTPUT
@@ -60,7 +62,7 @@ jobs:
     - name: Set golangci-lint version
       if: steps.check-branch.outputs.skip != 'true'
       id: set-golangci-lint-version
-      run: echo "version=$(yq '.vars.GOLANGCI_LINT_VERSION' Taskfile.yml)" >> $GITHUB_OUTPUT
+      run: echo "version=$(yq '.vars.GOLANGCI_LINT_VERSION' Taskfile.yml)" >> "$GITHUB_OUTPUT"
 
     - name: Run golangci-lint
       if: steps.check-branch.outputs.skip != 'true'
@@ -82,8 +84,10 @@ jobs:
     - name: Check if tagpr branch
       id: check-branch
       shell: pwsh
+      env:
+        BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       run: |
-        if ("${{ github.head_ref || github.ref_name }}" -like "tagpr-from-v*") {
+        if ("$env:BRANCH_NAME" -like "tagpr-from-v*") {
           "skip=true" >> $env:GITHUB_OUTPUT
         } else {
           "skip=false" >> $env:GITHUB_OUTPUT
@@ -147,8 +151,10 @@ jobs:
     - name: Check if tagpr branch
       id: check-branch
       shell: pwsh
+      env:
+        BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       run: |
-        if ("${{ github.head_ref || github.ref_name }}" -like "tagpr-from-v*") {
+        if ("$env:BRANCH_NAME" -like "tagpr-from-v*") {
           "skip=true" >> $env:GITHUB_OUTPUT
         } else {
           "skip=false" >> $env:GITHUB_OUTPUT
