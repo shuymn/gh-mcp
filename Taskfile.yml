@@ -15,43 +15,8 @@ tasks:
 
   bundled:prepare:
     desc: Download and verify bundled github-mcp-server archives
-    vars:
-      MCP_SERVER_VERSION:
-        sh: 'sed -nE ''s/^const mcpServerVersion = "(v[^"]+)"$/\1/p'' mcp_version.go | sed ''s/^v//'''
     status:
-      - |
-        checksums_file="bundled/github-mcp-server_{{.MCP_SERVER_VERSION}}_checksums.txt"
-        test -f "${checksums_file}" || exit 1
-
-        sha256_file() {
-          file_path="$1"
-          if command -v shasum >/dev/null 2>&1; then
-            shasum -a 256 "${file_path}" | awk '{print $1}'
-            return
-          fi
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "${file_path}" | awk '{print $1}'
-            return
-          fi
-          return 1
-        }
-
-        for asset in \
-          github-mcp-server_Darwin_arm64.tar.gz \
-          github-mcp-server_Darwin_x86_64.tar.gz \
-          github-mcp-server_Linux_i386.tar.gz \
-          github-mcp-server_Linux_arm64.tar.gz \
-          github-mcp-server_Linux_x86_64.tar.gz \
-          github-mcp-server_Windows_arm64.zip \
-          github-mcp-server_Windows_i386.zip \
-          github-mcp-server_Windows_x86_64.zip; do
-          file_path="bundled/${asset}"
-          test -f "${file_path}" || exit 1
-          expected="$(awk -v file_name="${asset}" '$2==file_name {print $1; exit}' "${checksums_file}")"
-          test -n "${expected}" || exit 1
-          actual="$(sha256_file "${file_path}")" || exit 1
-          test "${actual}" = "${expected}" || exit 1
-        done
+      - go run ./scripts/prepare -check
     cmds:
       - go run ./scripts/prepare
 
