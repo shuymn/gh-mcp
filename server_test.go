@@ -502,7 +502,16 @@ func (repeatByteReader) Read(p []byte) (int, error) {
 func newServerTestHelperCommand(t *testing.T, mode string) *exec.Cmd {
 	t.Helper()
 
-	cmd := exec.Command(os.Args[0], "-test.run=TestServerProcessHelper", "--", mode)
+	validMode := ""
+	switch mode {
+	case "exit-0", "exit-7", "exit-9", "sleep", "sleep-then-exit-5":
+		validMode = mode
+	default:
+		t.Fatalf("unsupported helper mode: %q", mode)
+	}
+
+	// #nosec G204 -- test-only helper launches the current test binary with a strict mode whitelist.
+	cmd := exec.Command(os.Args[0], "-test.run=TestServerProcessHelper", "--", validMode)
 	cmd.Env = append(os.Environ(), "GO_WANT_SERVER_PROCESS_HELPER=1")
 
 	return cmd
