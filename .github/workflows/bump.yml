@@ -112,7 +112,7 @@ jobs:
         if: steps.check-target.outputs.run == 'true'
         run: |
           set -euo pipefail
-          if git diff --quiet -- bundled mcp_version.go bundle_*.go; then
+          if [[ -z "$(git status --porcelain -- bundled mcp_version.go bundle_*.go)" ]]; then
             echo "No bundled asset changes detected"
             exit 0
           fi
