@@ -18,6 +18,13 @@ linters:
     - contextcheck
     - wsl_v5
     - noinlineerr
+    - gochecknoglobals
+    - goconst
+  settings:
+    mnd:
+      ignored-numbers:
+        - "0o700"
+        - "0o755"
   exclusions:
     warn-unused: true
     presets:
@@ -25,6 +32,11 @@ linters:
       - std-error-handling
       - common-false-positives
       - legacy
+    rules:
+      - linters:
+          - err113
+          - noctx
+        path: _test\.go
 formatters:
   enable:
     - gci

@@ -13,10 +13,20 @@ tasks:
     cmds:
       - task --list
 
+  bundled:prepare:
+    desc: Download and verify bundled github-mcp-server archives
+    status:
+      - go run ./scripts/prepare -check
+    cmds:
+      - go run ./scripts/prepare
+      - go run ./scripts/prepare -check
+
   build:
     desc: Build the binary
+    deps: [bundled:prepare]
     sources:
       - "**/*.go"
+      - "bundled/*"
       - go.mod
       - go.sum
     generates:
@@ -40,6 +50,7 @@ tasks:
     cmds:
       - rm -f {{.BINARY_NAME}}
       - rm -f {{.COVERAGE_FILE}} coverage.html
+      - rm -f bundled/github-mcp-server_*
       - go clean
 
   run:
@@ -50,11 +61,13 @@ tasks:
 
   test:
     desc: Run tests with race detection and shuffle (10 times)
+    deps: [bundled:prepare]
     cmds:
       - go test -race -shuffle=on -count=10 ./...
 
   test:coverage:
     desc: Run tests with coverage report
+    deps: [bundled:prepare]
     preconditions:
       - sh: command -v octocov
         msg: "octocov is not installed. Please install it first."
@@ -64,6 +77,7 @@ tasks:
 
   test:verbose:
     desc: Run tests with verbose output
+    deps: [bundled:prepare]
     cmds:
       - go test -v -race ./...
 
@@ -83,6 +97,7 @@ tasks:
     deps:
       - task: install:golangci-lint
         silent: true
+      - task: bundled:prepare
     cmds:
       - cmd: "{{.BIN_DIR}}/golangci-lint version"
         silent: true

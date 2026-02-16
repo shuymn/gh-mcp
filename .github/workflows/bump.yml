@@ -2,7 +2,7 @@ name: Bump
 
 on:
   pull_request:
-    types: [labeled]
+    types: [opened, synchronize, reopened, labeled]
     branches: [main]
 
 permissions:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   renovate:
     runs-on: ubuntu-latest
-    if: startsWith(github.head_ref, 'renovate/') && startsWith(github.event.label.name, 'renovate:')
+    if: github.event.action == 'labeled' && startsWith(github.head_ref, 'renovate/') && startsWith(github.event.label.name, 'renovate:')
 
     steps:
       - name: Checkout code
@@ -65,4 +65,62 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add VERSION
           git commit -m "chore: bump version to ${new:?}" || echo "no changes"
+          git push origin HEAD:"${GITHUB_HEAD_REF:?}"
+
+  refresh-bundled-mcp-server:
+    runs-on: ubuntu-latest
+    if: startsWith(github.head_ref, 'renovate/') && github.event.action != 'labeled'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: true
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Check if mcp_version.go changed
+        id: check-target
+        run: |
+          set -euo pipefail
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          if git diff --name-only "origin/${{ github.base_ref }}"...HEAD | grep -q "^mcp_version.go$"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract target github-mcp-server version
+        if: steps.check-target.outputs.run == 'true'
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(sed -nE 's/^const mcpServerVersion = "(v[^"]+)"$/\1/p' mcp_version.go)"
+          if [[ -z "${version}" ]]; then
+            echo "failed to parse mcpServerVersion from mcp_version.go"
+            exit 1
+          fi
+          echo "value=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Refresh bundled assets
+        if: steps.check-target.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ./scripts/update-bundled-mcp-server.sh "${{ steps.version.outputs.value }}"
+
+      - name: Commit and push refreshed bundle
+        if: steps.check-target.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          if [[ -z "$(git status --porcelain -- mcp_version.go bundle_*.go)" ]]; then
+            echo "No bundled asset changes detected"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mcp_version.go bundle_*.go
+          git commit -m "chore: refresh bundled github-mcp-server assets"
           git push origin HEAD:"${GITHUB_HEAD_REF:?}"
