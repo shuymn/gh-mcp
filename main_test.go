@@ -10,49 +10,25 @@ import (
 
 // Define static errors for testing
 var (
-	errNotLoggedIn      = errors.New("not logged in to GitHub. Please run `gh auth login`")
-	errDockerConnection = errors.New(
-		"failed to create docker client: connection refused. Is the Docker daemon running?",
-	)
-	errImageUnauthorized = errors.New(
-		"failed to pull docker image 'ghcr.io/github/github-mcp-server:latest': unauthorized",
-	)
-	errContainerNonZero = errors.New("container exited with non-zero status: 1")
-	errCaptureEnv       = errors.New("capture env")
+	errNotLoggedIn   = errors.New("not logged in to GitHub. Please run `gh auth login`")
+	errServerNonZero = errors.New("server exited with non-zero status: 1")
 )
 
-// mockRunner implements runner for testing
+// mockRunner implements runner for testing.
 type mockRunner struct {
-	authDetails     *authDetails
-	authErr         error
-	dockerClient    dockerClientInterface
-	dockerClientErr error
-	ensureImageErr  error
-	runContainerErr error
-	capturedEnv     []string // To capture env vars passed to runContainer
+	authDetails  *authDetails
+	authErr      error
+	runServerErr error
+	capturedEnv  []string
 }
 
 func (m *mockRunner) getAuth() (*authDetails, error) {
 	return m.authDetails, m.authErr
 }
 
-func (m *mockRunner) newDockerClient() (dockerClientInterface, error) {
-	return m.dockerClient, m.dockerClientErr
-}
-
-func (m *mockRunner) ensureImage(_ context.Context, _ dockerClientInterface, _ string) error {
-	return m.ensureImageErr
-}
-
-func (m *mockRunner) runContainer(
-	_ context.Context,
-	_ dockerClientInterface,
-	env []string,
-	_ string,
-	_ *ioStreams,
-) error {
+func (m *mockRunner) runServer(_ context.Context, env []string, _ *ioStreams) error {
 	m.capturedEnv = env
-	return m.runContainerErr
+	return m.runServerErr
 }
 
 func TestRunWithRunner(t *testing.T) {
@@ -68,7 +44,6 @@ func TestRunWithRunner(t *testing.T) {
 					Host:  "github.com",
 					Token: "test-token",
 				},
-				dockerClient: &mockDockerClient{},
 			},
 		},
 		{
@@ -79,39 +54,15 @@ func TestRunWithRunner(t *testing.T) {
 			wantErr: ErrNotLoggedIn.Error(),
 		},
 		{
-			name: "docker client error",
+			name: "run server error",
 			mock: &mockRunner{
 				authDetails: &authDetails{
 					Host:  "github.com",
 					Token: "test-token",
 				},
-				dockerClientErr: errDockerConnection,
+				runServerErr: errServerNonZero,
 			},
-			wantErr: "failed to create docker client: connection refused. Is the Docker daemon running?",
-		},
-		{
-			name: "ensure image error",
-			mock: &mockRunner{
-				authDetails: &authDetails{
-					Host:  "github.com",
-					Token: "test-token",
-				},
-				dockerClient:   &mockDockerClient{},
-				ensureImageErr: errImageUnauthorized,
-			},
-			wantErr: "failed to pull docker image 'ghcr.io/github/github-mcp-server:latest': unauthorized",
-		},
-		{
-			name: "run container error",
-			mock: &mockRunner{
-				authDetails: &authDetails{
-					Host:  "github.com",
-					Token: "test-token",
-				},
-				dockerClient:    &mockDockerClient{},
-				runContainerErr: errContainerNonZero,
-			},
-			wantErr: "container exited with non-zero status: 1",
+			wantErr: "server exited with non-zero status: 1",
 		},
 		{
 			name: "enterprise host",
@@ -120,7 +71,6 @@ func TestRunWithRunner(t *testing.T) {
 					Host:  "github.enterprise.com",
 					Token: "enterprise-token",
 				},
-				dockerClient: &mockDockerClient{},
 			},
 		},
 	}
@@ -147,47 +97,26 @@ func TestRunWithRunner(t *testing.T) {
 	}
 }
 
-func TestEnvironmentVariables(t *testing.T) {
-	// Test that environment variables are properly formatted
-	mock := &mockRunner{
-		authDetails: &authDetails{
-			Host:  "github.test.com",
-			Token: "test-token-123",
-		},
-		dockerClient: &mockDockerClient{},
-		// Mock to capture environment variables
-		runContainerErr: errCaptureEnv,
-	}
-
-	ctx := t.Context()
-	_ = runWithRunner(ctx, mock)
-
-	// The test passes if the error is as expected
-	// In a real test, we'd capture the env variables passed to runContainer
-}
-
 func TestOptionalEnvironmentVariables(t *testing.T) {
-	// Set test values using t.Setenv (automatically cleaned up)
+	// Set test values using t.Setenv (automatically cleaned up).
 	t.Setenv("GITHUB_TOOLSETS", "repos,issues")
 	t.Setenv("GITHUB_DYNAMIC_TOOLSETS", "1")
 	t.Setenv("GITHUB_READ_ONLY", "1")
 
-	// Create a mock that captures the env parameter
+	// Create a mock that captures the env parameter.
 	mock := &mockRunner{
 		authDetails: &authDetails{
 			Host:  "https://github.com",
 			Token: "test-token",
 		},
-		dockerClient: &mockDockerClient{},
 	}
 
-	ctx := t.Context()
-	err := runWithRunner(ctx, mock)
+	err := runWithRunner(t.Context(), mock)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Check that all expected env vars are present
+	// Check that all expected env vars are present.
 	expectedEnvs := map[string]string{
 		"GITHUB_PERSONAL_ACCESS_TOKEN": "test-token",
 		"GITHUB_HOST":                  "https://github.com",
@@ -204,7 +133,7 @@ func TestOptionalEnvironmentVariables(t *testing.T) {
 }
 
 func TestOptionalEnvironmentVariablesNotSet(t *testing.T) {
-	// Ensure env vars are not set
+	// Ensure env vars are not set.
 	t.Setenv("GITHUB_TOOLSETS", "")
 	t.Setenv("GITHUB_DYNAMIC_TOOLSETS", "")
 	t.Setenv("GITHUB_READ_ONLY", "")
@@ -214,22 +143,19 @@ func TestOptionalEnvironmentVariablesNotSet(t *testing.T) {
 			Host:  "https://github.com",
 			Token: "test-token",
 		},
-		dockerClient: &mockDockerClient{},
 	}
 
-	ctx := t.Context()
-	err := runWithRunner(ctx, mock)
+	err := runWithRunner(t.Context(), mock)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Check that only required env vars are present
+	// Check that only required env vars are present.
 	requiredEnvs := map[string]string{
 		"GITHUB_PERSONAL_ACCESS_TOKEN": "test-token",
 		"GITHUB_HOST":                  "https://github.com",
 	}
 
-	// Should only have the required env vars
 	if len(mock.capturedEnv) != len(requiredEnvs) {
 		t.Errorf(
 			"Expected %d env vars, got %d: %v",
