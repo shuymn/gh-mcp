@@ -258,6 +258,7 @@ func extractTarGzExecutable(archive []byte, executableName, outputPath string) e
 		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
 			continue
 		}
+		// Archive entry names use "/" separators regardless of host OS.
 		if path.Base(header.Name) != executableName {
 			continue
 		}
@@ -295,6 +296,7 @@ func extractZipExecutable(archive []byte, executableName, outputPath string) err
 	}
 
 	for _, fileInArchive := range zipReader.File {
+		// Archive entry names use "/" separators regardless of host OS.
 		if path.Base(fileInArchive.Name) != executableName {
 			continue
 		}
