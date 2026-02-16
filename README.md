@@ -109,7 +109,6 @@ The extension passes through several environment variables to configure the MCP 
 
 - Required `GITHUB_*` variables are set by `gh-mcp`
 - Only a fixed allowlist from the parent process is forwarded (`PATH`, temp-dir vars, proxy/cert vars)
-- Known dangerous Node.js injection variables are blocked (`NODE_OPTIONS`, `NODE_EXTRA_CA_CERTS`, `NODE_PATH`)
 
 Proxy variables are intentionally forwarded to support enterprise networks. If you run `gh mcp` from an untrusted wrapper process, clear proxy/certificate variables before launch.
 

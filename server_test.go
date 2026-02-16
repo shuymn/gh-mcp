@@ -179,15 +179,12 @@ func TestCopyBundledExecutableWithLimit(t *testing.T) {
 func TestBuildChildProcessEnv(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin:/bin")
 	t.Setenv("HTTPS_PROXY", "https://proxy.example.test")
-	t.Setenv("NODE_OPTIONS", "--require=/tmp/evil.js")
-	t.Setenv("NODE_EXTRA_CA_CERTS", "/tmp/evil-ca.pem")
 	t.Setenv("SECRET_SHOULD_NOT_PASS", "top-secret")
 
 	env := buildChildProcessEnv([]string{
 		"GITHUB_PERSONAL_ACCESS_TOKEN=token-123",
 		"GITHUB_HOST=https://github.com",
 		"PATH=/custom/bin", // required values should take precedence
-		"NODE_OPTIONS=--inspect",
 		"MALFORMED",
 	})
 
@@ -207,12 +204,6 @@ func TestBuildChildProcessEnv(t *testing.T) {
 	}
 	if _, ok := m["SECRET_SHOULD_NOT_PASS"]; ok {
 		t.Fatal("unexpected secret env propagated to child process")
-	}
-	if _, ok := m["NODE_OPTIONS"]; ok {
-		t.Fatal("NODE_OPTIONS must not be propagated to child process")
-	}
-	if _, ok := m["NODE_EXTRA_CA_CERTS"]; ok {
-		t.Fatal("NODE_EXTRA_CA_CERTS must not be propagated to child process")
 	}
 	if _, ok := m["MALFORMED"]; ok {
 		t.Fatal("malformed env entry should not be propagated")

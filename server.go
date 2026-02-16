@@ -76,12 +76,6 @@ var allowedParentEnvKeys = []string{
 	"SSL_CERT_DIR",
 }
 
-var blockedChildEnvKeys = map[string]struct{}{
-	"NODE_OPTIONS":        {},
-	"NODE_EXTRA_CA_CERTS": {},
-	"NODE_PATH":           {},
-}
-
 func runBundledServer(ctx context.Context, env []string, streams *ioStreams) error {
 	binaryPath, cleanup, err := materializeBundledServerBinary()
 	if err != nil {
@@ -601,16 +595,10 @@ func buildChildProcessEnv(required []string) []string {
 		if !ok || key == "" {
 			continue
 		}
-		if isBlockedChildEnvKey(key) {
-			continue
-		}
 		add(key, value)
 	}
 
 	for _, key := range allowedParentEnvKeys {
-		if isBlockedChildEnvKey(key) {
-			continue
-		}
 		if _, exists := merged[key]; exists {
 			continue
 		}
@@ -625,9 +613,4 @@ func buildChildProcessEnv(required []string) []string {
 	}
 
 	return result
-}
-
-func isBlockedChildEnvKey(key string) bool {
-	_, blocked := blockedChildEnvKeys[strings.ToUpper(key)]
-	return blocked
 }
