@@ -181,6 +181,38 @@ func TestBundledChecksumConstantMatchesChecksumsFile(t *testing.T) {
 	}
 }
 
+func TestCreateTempDirWithFallback(t *testing.T) {
+	root := t.TempDir()
+
+	invalidParent := filepath.Join(root, "not-a-directory")
+	if err := os.WriteFile(invalidParent, []byte("x"), 0o600); err != nil {
+		t.Fatalf("failed to create invalid parent sentinel: %v", err)
+	}
+
+	validParent := filepath.Join(root, "cache")
+
+	tmpDir, err := createTempDirWithFallback([]string{invalidParent, validParent})
+	if err != nil {
+		t.Fatalf("createTempDirWithFallback returned error: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	if !strings.HasPrefix(tmpDir, validParent+string(filepath.Separator)) {
+		t.Fatalf("expected temp dir under %q, got %q", validParent, tmpDir)
+	}
+}
+
+func TestBundledServerTempParentDirs(t *testing.T) {
+	parentDirs := bundledServerTempParentDirs()
+	if len(parentDirs) == 0 {
+		t.Fatal("expected at least one temp parent directory")
+	}
+
+	if got := parentDirs[len(parentDirs)-1]; got != "" {
+		t.Fatalf("expected system temp fallback as last entry, got %q", got)
+	}
+}
+
 func buildTarGzArchive(t *testing.T, files map[string]string) []byte {
 	t.Helper()
 

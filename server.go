@@ -136,9 +136,9 @@ func materializeBundledServerBinary() (string, func(), error) {
 		return "", func() {}, err
 	}
 
-	tmpDir, err := os.MkdirTemp("", "gh-mcp-server-*")
+	tmpDir, err := createTempDirWithFallback(bundledServerTempParentDirs())
 	if err != nil {
-		return "", func() {}, fmt.Errorf("failed to create temporary directory: %w", err)
+		return "", func() {}, err
 	}
 	cleanup := func() {
 		_ = os.RemoveAll(tmpDir)
@@ -167,6 +167,55 @@ func materializeBundledServerBinary() (string, func(), error) {
 	}
 
 	return binaryPath, cleanup, nil
+}
+
+func bundledServerTempParentDirs() []string {
+	parentDirs := make([]string, 0, 2)
+
+	if cacheDir, err := os.UserCacheDir(); err == nil && cacheDir != "" {
+		parentDirs = append(parentDirs, filepath.Join(cacheDir, "gh-mcp"))
+	}
+
+	// Keep system temp as a fallback when cache dir is unavailable.
+	parentDirs = append(parentDirs, "")
+
+	return parentDirs
+}
+
+func createTempDirWithFallback(parentDirs []string) (string, error) {
+	if len(parentDirs) == 0 {
+		parentDirs = []string{""}
+	}
+
+	attemptErrs := make([]error, 0, len(parentDirs))
+
+	for _, parentDir := range parentDirs {
+		tmpDir, err := createTempDir(parentDir)
+		if err == nil {
+			return tmpDir, nil
+		}
+		attemptErrs = append(attemptErrs, err)
+	}
+
+	return "", fmt.Errorf("failed to create temporary directory: %w", errors.Join(attemptErrs...))
+}
+
+func createTempDir(parentDir string) (string, error) {
+	if parentDir != "" {
+		if err := os.MkdirAll(parentDir, 0o700); err != nil {
+			return "", fmt.Errorf("failed to create parent directory %q: %w", parentDir, err)
+		}
+	}
+
+	tmpDir, err := os.MkdirTemp(parentDir, "gh-mcp-server-*")
+	if err != nil {
+		if parentDir == "" {
+			return "", fmt.Errorf("failed to create temporary directory in system temp: %w", err)
+		}
+		return "", fmt.Errorf("failed to create temporary directory in %q: %w", parentDir, err)
+	}
+
+	return tmpDir, nil
 }
 
 func verifyBundledArchiveChecksum(archive []byte, expectedSHA256 string) error {
