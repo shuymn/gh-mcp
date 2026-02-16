@@ -107,12 +107,14 @@ func waitForServerExit(ctx context.Context, cmd *exec.Cmd) error {
 	}()
 
 	select {
-	case err := <-waitCh:
+	case waitErr := <-waitCh:
 		// Prefer clean shutdown semantics if the caller has already canceled.
-		if ctx.Err() != nil {
+		select {
+		case <-ctx.Done():
 			return nil
+		default:
+			return normalizeServerExit(waitErr)
 		}
-		return normalizeServerExit(err)
 	case <-ctx.Done():
 		stopServerProcess(cmd, waitCh)
 		return nil
