@@ -27,7 +27,6 @@ fi
 
 VERSION_NO_V="${VERSION#v}"
 UPSTREAM_REPOSITORY="github/github-mcp-server"
-API_ENDPOINT="/repos/${UPSTREAM_REPOSITORY}/releases/tags/${VERSION}"
 BUNDLED_DIR="bundled"
 CHECKSUMS_FILE="${BUNDLED_DIR}/github-mcp-server_${VERSION_NO_V}_checksums.txt"
 CHECKSUMS_ASSET="github-mcp-server_${VERSION_NO_V}_checksums.txt"
@@ -83,83 +82,44 @@ download_release_asset() {
     --clobber
 }
 
-ensure_gh_auth
-mkdir -p "${BUNDLED_DIR}"
-
-echo "Loading release metadata for ${VERSION}..."
-RELEASE_ASSETS_TSV="$(gh api \
-  -H "Accept: application/vnd.github+json" \
-  "${API_ENDPOINT}" \
-  --jq '.assets[] | [.name, .digest] | @tsv')"
-
-if [[ -z "${RELEASE_ASSETS_TSV}" ]]; then
-  echo "failed to load release metadata for ${VERSION}"
-  exit 1
-fi
-
-release_asset_digest() {
+checksum_for_asset_from_file() {
   local asset_name="$1"
-  local digest
-  digest="$(awk -F $'\t' -v name="${asset_name}" '$1==name {print $2; exit}' <<<"${RELEASE_ASSETS_TSV}")"
-
-  if [[ -z "${digest}" ]]; then
-    echo "Failed to find ${asset_name} in release metadata"
-    exit 1
-  fi
-
-  printf '%s\n' "${digest}"
+  awk -v file_name="${asset_name}" '$2==file_name {print $1; exit}' "${CHECKSUMS_FILE}"
 }
 
-verify_asset_against_release_metadata() {
+verify_asset_against_checksums_file() {
   local asset_name="$1"
   local file_path="$2"
 
-  local expected_with_prefix
-  expected_with_prefix="$(release_asset_digest "${asset_name}")"
-
-  if [[ "${expected_with_prefix}" != sha256:* ]]; then
-    echo "Unsupported digest format for ${asset_name}: ${expected_with_prefix}"
+  local expected actual
+  expected="$(checksum_for_asset_from_file "${asset_name}")"
+  if [[ -z "${expected}" ]]; then
+    echo "Failed to find checksum for ${asset_name} in ${CHECKSUMS_FILE}"
     exit 1
   fi
 
-  local expected actual
-  expected="${expected_with_prefix#sha256:}"
   actual="$(sha256_file "${file_path}")"
-
   if [[ "${actual}" != "${expected}" ]]; then
-    echo "Release metadata digest mismatch for ${asset_name}"
+    echo "Checksum mismatch for ${asset_name}"
     echo "expected=${expected}"
     echo "actual=${actual}"
     exit 1
   fi
 }
 
+ensure_gh_auth
+mkdir -p "${BUNDLED_DIR}"
+
 echo "Downloading checksums for ${VERSION}..."
 download_release_asset "${CHECKSUMS_ASSET}"
-verify_asset_against_release_metadata "${CHECKSUMS_ASSET}" "${CHECKSUMS_FILE}"
+
+echo "Verifying attestation for ${CHECKSUMS_ASSET}..."
+gh release verify-asset "${VERSION}" "${CHECKSUMS_FILE}" --repo "${UPSTREAM_REPOSITORY}" >/dev/null
 
 for asset in "${ASSETS[@]}"; do
   echo "Downloading ${asset}..."
   download_release_asset "${asset}"
-  verify_asset_against_release_metadata "${asset}" "${BUNDLED_DIR}/${asset}"
+  verify_asset_against_checksums_file "${asset}" "${BUNDLED_DIR}/${asset}"
 done
-
-echo "Verifying checksums file entries..."
-while read -r expected file_name; do
-  [[ -n "${expected}" ]] || continue
-
-  target="${BUNDLED_DIR}/${file_name}"
-  if [[ ! -f "${target}" ]]; then
-    continue
-  fi
-
-  actual="$(sha256_file "${target}")"
-  if [[ "${actual}" != "${expected}" ]]; then
-    echo "Checksum mismatch for ${file_name}"
-    echo "expected=${expected}"
-    echo "actual=${actual}"
-    exit 1
-  fi
-done < "${CHECKSUMS_FILE}"
 
 echo "Bundled assets prepared for ${VERSION}."

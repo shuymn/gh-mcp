@@ -38,7 +38,7 @@ When bumping the bundled MCP server version, refresh pinned metadata from the ta
 
 This updates `mcp_version.go` and SHA256 constants in `bundle_*.go`.
 Release archives under `bundled/` are downloaded on demand and are gitignored.
-`scripts/prepare-bundled-mcp-server.sh` and `scripts/update-bundled-mcp-server.sh` use authenticated `gh` API requests,
+`scripts/prepare-bundled-mcp-server.sh` and `scripts/update-bundled-mcp-server.sh` use authenticated `gh` requests (including release attestation verification),
 so run `gh auth login` locally or set `GH_TOKEN` (or `GITHUB_TOKEN`) in CI.
 
 ## Development Workflow
