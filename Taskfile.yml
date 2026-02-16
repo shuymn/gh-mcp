@@ -19,6 +19,7 @@ tasks:
       - go run ./scripts/prepare -check
     cmds:
       - go run ./scripts/prepare
+      - go run ./scripts/prepare -check
 
   build:
     desc: Build the binary

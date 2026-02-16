@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -27,21 +28,30 @@ const (
 	defaultDownloadRetryDelaySec = 2
 	submatchWithWholeMatchCount  = 2
 	checksumLineFieldCount       = 2
+	bundleFileGlobPattern        = "bundle_*.go"
 )
 
 var (
-	errUsage             = errors.New("usage: prepare [github-mcp-server version (e.g. v0.30.3)]")
+	errUsage             = errors.New("usage: prepare [-check] [version]")
 	errGHNotInstalled    = errors.New("gh CLI is required but not installed")
 	errInvalidRetryCount = errors.New("DOWNLOAD_RETRY_COUNT must be a positive integer")
-	errInvalidRetryDelay = errors.New("DOWNLOAD_RETRY_DELAY_SECONDS must be a positive integer")
-	errParseMCPVersion   = errors.New("failed to parse mcpServerVersion")
-	errGHAuthRequired    = errors.New("gh authentication is required")
-	errContextDone       = errors.New("prepare interrupted")
-	errGHCommandFailed   = errors.New("gh command failed")
-	errChecksumNotFound  = errors.New("asset checksum not found")
-	errChecksumMismatch  = errors.New("asset checksum mismatch")
-	mcpVersionPattern    = regexp.MustCompile(`^const mcpServerVersion = "(v[^"]+)"$`)
-	assets               = []string{
+	errInvalidRetryDelay = errors.New(
+		"DOWNLOAD_RETRY_DELAY_SECONDS must be a positive integer",
+	)
+	errParseMCPVersion         = errors.New("failed to parse mcpServerVersion")
+	errGHAuthRequired          = errors.New("gh authentication is required")
+	errContextDone             = errors.New("prepare interrupted")
+	errGHCommandFailed         = errors.New("gh command failed")
+	errChecksumNotFound        = errors.New("asset checksum not found")
+	errChecksumMismatch        = errors.New("asset checksum mismatch")
+	errPinnedChecksumNotFound  = errors.New("pinned checksum not found")
+	errPinnedChecksumMismatch  = errors.New("pinned checksum mismatch")
+	errBundleMetadataNotFound  = errors.New("bundle metadata not found")
+	errBundleMetadataInvalid   = errors.New("bundle metadata is invalid")
+	mcpVersionPattern          = regexp.MustCompile(`^const mcpServerVersion = "(v[^"]+)"$`)
+	bundleArchiveNamePattern   = regexp.MustCompile(`bundledMCPArchiveName\s*=\s*"([^"]*)"`)
+	bundleArchiveSHA256Pattern = regexp.MustCompile(`bundledMCPArchiveSHA256\s*=\s*"([^"]*)"`)
+	assets                     = []string{
 		"github-mcp-server_Darwin_arm64.tar.gz",
 		"github-mcp-server_Darwin_x86_64.tar.gz",
 		"github-mcp-server_Linux_i386.tar.gz",
@@ -234,6 +244,13 @@ func checkBundledAssets(version string) error {
 	if err != nil {
 		return err
 	}
+	pinnedChecksums, err := loadPinnedChecksums()
+	if err != nil {
+		return err
+	}
+	if err := verifyPinnedChecksums(checksums, pinnedChecksums); err != nil {
+		return err
+	}
 
 	for _, asset := range assets {
 		filePath := filepath.Join(bundledDirName, asset)
@@ -242,6 +259,96 @@ func checkBundledAssets(version string) error {
 		}
 		if err := verifyAssetChecksum(checksums, asset, filePath, checksumsFile); err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+func loadPinnedChecksums() (map[string]string, error) {
+	bundleFiles, err := filepath.Glob(bundleFileGlobPattern)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list bundle files: %w", err)
+	}
+	if len(bundleFiles) == 0 {
+		return nil, fmt.Errorf("%w: pattern=%s", errBundleMetadataNotFound, bundleFileGlobPattern)
+	}
+
+	slices.Sort(bundleFiles)
+
+	pinnedChecksums := make(map[string]string, len(bundleFiles))
+	for _, bundleFile := range bundleFiles {
+		metadata, err := parseBundleMetadata(bundleFile)
+		if err != nil {
+			return nil, err
+		}
+		if metadata.archiveName == "" && metadata.sha256 == "" {
+			continue
+		}
+		if metadata.archiveName == "" || metadata.sha256 == "" {
+			return nil, fmt.Errorf("%w: file=%s", errBundleMetadataInvalid, bundleFile)
+		}
+
+		pinnedChecksums[metadata.archiveName] = metadata.sha256
+	}
+
+	return pinnedChecksums, nil
+}
+
+type bundleMetadata struct {
+	archiveName string
+	sha256      string
+}
+
+func parseBundleMetadata(bundleFile string) (*bundleMetadata, error) {
+	content, err := os.ReadFile(bundleFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s: %w", bundleFile, err)
+	}
+
+	archiveName, err := extractBundleConst(string(content), bundleArchiveNamePattern)
+	if err != nil {
+		return nil, fmt.Errorf("%w: file=%s field=bundledMCPArchiveName", err, bundleFile)
+	}
+	sha256, err := extractBundleConst(string(content), bundleArchiveSHA256Pattern)
+	if err != nil {
+		return nil, fmt.Errorf("%w: file=%s field=bundledMCPArchiveSHA256", err, bundleFile)
+	}
+
+	return &bundleMetadata{
+		archiveName: archiveName,
+		sha256:      sha256,
+	}, nil
+}
+
+func extractBundleConst(content string, pattern *regexp.Regexp) (string, error) {
+	matches := pattern.FindStringSubmatch(content)
+	if len(matches) != submatchWithWholeMatchCount {
+		return "", errBundleMetadataNotFound
+	}
+
+	return matches[1], nil
+}
+
+func verifyPinnedChecksums(checksums map[string]string, pinnedChecksums map[string]string) error {
+	for _, asset := range assets {
+		expectedChecksum, ok := checksums[asset]
+		if !ok {
+			return fmt.Errorf("%w: asset=%s", errChecksumNotFound, asset)
+		}
+
+		pinnedChecksum, ok := pinnedChecksums[asset]
+		if !ok {
+			return fmt.Errorf("%w: asset=%s", errPinnedChecksumNotFound, asset)
+		}
+		if pinnedChecksum != expectedChecksum {
+			return fmt.Errorf(
+				"%w: asset=%s expected=%s pinned=%s",
+				errPinnedChecksumMismatch,
+				asset,
+				expectedChecksum,
+				pinnedChecksum,
+			)
 		}
 	}
 

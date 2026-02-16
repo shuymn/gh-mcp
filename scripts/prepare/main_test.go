@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -215,6 +216,20 @@ func TestCheckBundledAssets(t *testing.T) {
 			t.Fatalf("expected errChecksumMismatch, got: %v", err)
 		}
 	})
+
+	t.Run("pinned checksum mismatch", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		createBundledFixture(t, version)
+		writeBundleMetadataFixture(t, assets[0], strings.Repeat("0", 64))
+
+		err := checkBundledAssets(version)
+		if err == nil {
+			t.Fatal("expected checkBundledAssets to fail on pinned checksum mismatch")
+		}
+		if !errors.Is(err, errPinnedChecksumMismatch) {
+			t.Fatalf("expected errPinnedChecksumMismatch, got: %v", err)
+		}
+	})
 }
 
 func createBundledFixture(t *testing.T, version string) {
@@ -233,12 +248,36 @@ func createBundledFixture(t *testing.T, version string) {
 		}
 
 		sum := sha256.Sum256(body)
-		lines = append(lines, hex.EncodeToString(sum[:])+" "+asset)
+		hexSum := hex.EncodeToString(sum[:])
+		lines = append(lines, hexSum+" "+asset)
+		writeBundleMetadataFixture(t, asset, hexSum)
 	}
 
 	checksumsPath := filepath.Join(bundledDirName, checksumsAssetName(version))
 	content := strings.Join(lines, "\n") + "\n"
 	if err := os.WriteFile(checksumsPath, []byte(content), 0o600); err != nil {
 		t.Fatalf("failed to write fixture checksums: %v", err)
+	}
+}
+
+func writeBundleMetadataFixture(t *testing.T, asset string, checksum string) {
+	t.Helper()
+
+	fileName := "bundle_fixture_" + strings.NewReplacer(".", "_", "-", "_").Replace(asset) + ".go"
+	filePath := fileName
+	fileContent := fmt.Sprintf(
+		`package main
+
+const (
+	bundledMCPArchiveName    = %q
+	bundledMCPArchiveSHA256  = %q
+	bundledMCPExecutableName = "github-mcp-server"
+)
+`,
+		asset,
+		checksum,
+	)
+	if err := os.WriteFile(filePath, []byte(fileContent), 0o600); err != nil {
+		t.Fatalf("failed to write bundle metadata fixture for %s: %v", asset, err)
 	}
 }
