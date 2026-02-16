@@ -168,7 +168,7 @@ The bundled binary did not pass integrity verification. Reinstall or upgrade the
 ### "bundled temp parent directory is insecure"
 The cache parent directory for extracted binaries failed ownership/permission checks. On Unix-like systems, ensure your user owns the cache path and that permissions are private (for example, `0700`).
 
-### "server exited with non-zero status: <code>"
+### "server exited with non-zero status: `<code>`"
 The bundled `github-mcp-server` started but returned an error. Check MCP client configuration and `GITHUB_*` environment values.
 
 ### "invalid server environment value"

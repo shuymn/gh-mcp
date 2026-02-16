@@ -12,12 +12,16 @@ jobs:
   renovate:
     runs-on: ubuntu-latest
     if: github.event.action == 'labeled' && startsWith(github.head_ref, 'renovate/') && startsWith(github.event.label.name, 'renovate:')
+    timeout-minutes: 20
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          persist-credentials: true
+          token: ${{ github.token }}
+          persist-credentials: false
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
@@ -36,7 +40,9 @@ jobs:
           set -euo pipefail
           ver=$(cat VERSION 2>/dev/null || echo "0.0.0")
           ver=${ver#v}
-          IFS='.' read -r major minor patch <<< "${ver:?}"
+          major=${ver%%.*}
+          rest=${ver#*.}
+          minor=${rest%%.*}
           minor=$((minor + 1))
           new="${major:?}.${minor:?}.0"
           echo "${new:?}" > VERSION
@@ -49,7 +55,7 @@ jobs:
           set -euo pipefail
           ver=$(cat VERSION 2>/dev/null || echo "0.0.0")
           ver=${ver#v}
-          IFS='.' read -r major minor patch <<< "${ver:?}"
+          major=${ver%%.*}
           major=$((major + 1))
           new="${major:?}.0.0"
           echo "${new:?}" > VERSION
@@ -57,6 +63,8 @@ jobs:
 
       - name: Commit and push if version changed
         if: steps.bump-minor.outputs.changed == 'true' || steps.bump-major.outputs.changed == 'true'
+        env:
+          PUSH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           new=$(cat VERSION)
@@ -65,17 +73,21 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add VERSION
           git commit -m "chore: bump version to ${new:?}" || echo "no changes"
-          git push origin HEAD:"${GITHUB_HEAD_REF:?}"
+          git push "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:"${GITHUB_HEAD_REF:?}"
 
   refresh-bundled-mcp-server:
     runs-on: ubuntu-latest
     if: startsWith(github.head_ref, 'renovate/') && github.event.action != 'labeled'
+    timeout-minutes: 20
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          persist-credentials: true
+          token: ${{ github.token }}
+          persist-credentials: false
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
@@ -112,6 +124,8 @@ jobs:
 
       - name: Commit and push refreshed bundle
         if: steps.check-target.outputs.run == 'true'
+        env:
+          PUSH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [[ -z "$(git status --porcelain -- mcp_version.go bundle_*.go)" ]]; then
@@ -123,4 +137,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add mcp_version.go bundle_*.go
           git commit -m "chore: refresh bundled github-mcp-server assets"
-          git push origin HEAD:"${GITHUB_HEAD_REF:?}"
+          git push "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:"${GITHUB_HEAD_REF:?}"
