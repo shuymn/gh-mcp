@@ -36,7 +36,9 @@ jobs:
           set -euo pipefail
           ver=$(cat VERSION 2>/dev/null || echo "0.0.0")
           ver=${ver#v}
-          IFS='.' read -r major minor patch <<< "${ver:?}"
+          major=${ver%%.*}
+          rest=${ver#*.}
+          minor=${rest%%.*}
           minor=$((minor + 1))
           new="${major:?}.${minor:?}.0"
           echo "${new:?}" > VERSION
@@ -49,7 +51,7 @@ jobs:
           set -euo pipefail
           ver=$(cat VERSION 2>/dev/null || echo "0.0.0")
           ver=${ver#v}
-          IFS='.' read -r major minor patch <<< "${ver:?}"
+          major=${ver%%.*}
           major=$((major + 1))
           new="${major:?}.0.0"
           echo "${new:?}" > VERSION
