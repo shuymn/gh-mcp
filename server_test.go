@@ -178,6 +178,10 @@ func TestBuildChildProcessEnv(t *testing.T) {
 }
 
 func TestBundledVersionMatchesChecksumsFile(t *testing.T) {
+	if bundledMCPArchiveName == "" {
+		t.Skip("no bundled archive for this platform")
+	}
+
 	version := strings.TrimPrefix(mcpServerVersion, "v")
 	checksumsPath := filepath.Join(
 		"bundled",
