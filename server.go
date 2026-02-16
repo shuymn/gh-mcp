@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"os/exec"
 	"path"
@@ -23,6 +24,8 @@ import (
 
 // ErrServerNonZeroExit is returned when github-mcp-server exits with non-zero status.
 var ErrServerNonZeroExit = errors.New("server exited with non-zero status")
+
+const maxBundledExecutableBytes int64 = 64 << 20 // 64 MiB
 
 var allowedParentEnvKeys = []string{
 	// Basic runtime environment.
@@ -124,7 +127,8 @@ func normalizeServerExit(err error) error {
 }
 
 func materializeBundledServerBinary() (string, func(), error) {
-	if bundledMCPArchiveName == "" || bundledMCPExecutableName == "" || len(bundledMCPArchive) == 0 {
+	if bundledMCPArchiveName == "" || bundledMCPExecutableName == "" ||
+		len(bundledMCPArchive) == 0 {
 		return "", func() {}, fmt.Errorf(
 			"no bundled github-mcp-server for platform %s/%s",
 			runtime.GOOS,
@@ -257,15 +261,21 @@ func extractTarGzExecutable(archive []byte, executableName, outputPath string) e
 		if path.Base(header.Name) != executableName {
 			continue
 		}
+		if err := validateBundledExecutableSize(header.Size, executableName); err != nil {
+			return err
+		}
 
 		file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o700)
 		if err != nil {
 			return fmt.Errorf("failed to create extracted binary: %w", err)
 		}
-		defer file.Close()
 
 		if _, err := io.Copy(file, tarReader); err != nil {
+			_ = file.Close()
 			return fmt.Errorf("failed to extract bundled binary: %w", err)
+		}
+		if err := file.Close(); err != nil {
+			return fmt.Errorf("failed to close extracted binary: %w", err)
 		}
 
 		return nil
@@ -287,6 +297,12 @@ func extractZipExecutable(archive []byte, executableName, outputPath string) err
 	for _, fileInArchive := range zipReader.File {
 		if path.Base(fileInArchive.Name) != executableName {
 			continue
+		}
+		if err := validateZipExecutableSize(
+			fileInArchive.UncompressedSize64,
+			executableName,
+		); err != nil {
+			return err
 		}
 
 		readCloser, err := fileInArchive.Open()
@@ -322,6 +338,34 @@ func extractZipExecutable(archive []byte, executableName, outputPath string) err
 		executableName,
 		bundledMCPArchiveName,
 	)
+}
+
+func validateBundledExecutableSize(size int64, executableName string) error {
+	if size < 0 || size > maxBundledExecutableBytes {
+		return fmt.Errorf(
+			"bundled executable %q has invalid size %d bytes in %s (allowed: 0-%d bytes)",
+			executableName,
+			size,
+			bundledMCPArchiveName,
+			maxBundledExecutableBytes,
+		)
+	}
+
+	return nil
+}
+
+func validateZipExecutableSize(size uint64, executableName string) error {
+	if size > math.MaxInt64 {
+		return fmt.Errorf(
+			"bundled executable %q has invalid size %d bytes in %s (allowed: 0-%d bytes)",
+			executableName,
+			size,
+			bundledMCPArchiveName,
+			maxBundledExecutableBytes,
+		)
+	}
+
+	return validateBundledExecutableSize(int64(size), executableName)
 }
 
 func buildChildProcessEnv(required []string) []string {

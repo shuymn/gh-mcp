@@ -93,10 +93,54 @@ func TestExtractZipExecutableNotFound(t *testing.T) {
 		"README.md": "readme",
 	})
 
-	err := extractZipExecutable(archive, "github-mcp-server.exe", filepath.Join(t.TempDir(), "out.exe"))
+	err := extractZipExecutable(
+		archive,
+		"github-mcp-server.exe",
+		filepath.Join(t.TempDir(), "out.exe"),
+	)
 	if err == nil {
 		t.Fatal("expected extractZipExecutable to fail when executable is missing")
 	}
+}
+
+func TestBundledExecutableSizeValidation(t *testing.T) {
+	t.Run("negative tar size", func(t *testing.T) {
+		err := validateBundledExecutableSize(-1, "github-mcp-server")
+		if err == nil {
+			t.Fatal("expected negative size to fail validation")
+		}
+	})
+
+	t.Run("zero tar size", func(t *testing.T) {
+		err := validateBundledExecutableSize(0, "github-mcp-server")
+		if err != nil {
+			t.Fatalf("expected zero size to pass validation, got: %v", err)
+		}
+	})
+
+	t.Run("max tar size", func(t *testing.T) {
+		err := validateBundledExecutableSize(maxBundledExecutableBytes, "github-mcp-server")
+		if err != nil {
+			t.Fatalf("expected max size to pass validation, got: %v", err)
+		}
+	})
+
+	t.Run("tar size over max", func(t *testing.T) {
+		err := validateBundledExecutableSize(maxBundledExecutableBytes+1, "github-mcp-server")
+		if err == nil {
+			t.Fatal("expected over-max size to fail validation")
+		}
+	})
+
+	t.Run("zip size over max", func(t *testing.T) {
+		err := validateZipExecutableSize(
+			uint64(maxBundledExecutableBytes+1),
+			"github-mcp-server.exe",
+		)
+		if err == nil {
+			t.Fatal("expected zip over-max size to fail validation")
+		}
+	})
 }
 
 func TestBuildChildProcessEnv(t *testing.T) {
@@ -135,10 +179,18 @@ func TestBuildChildProcessEnv(t *testing.T) {
 
 func TestBundledVersionMatchesChecksumsFile(t *testing.T) {
 	version := strings.TrimPrefix(mcpServerVersion, "v")
-	checksumsPath := filepath.Join("bundled", fmt.Sprintf("github-mcp-server_%s_checksums.txt", version))
+	checksumsPath := filepath.Join(
+		"bundled",
+		fmt.Sprintf("github-mcp-server_%s_checksums.txt", version),
+	)
 
 	if _, err := os.Stat(checksumsPath); err != nil {
-		t.Fatalf("expected checksums file %q for mcpServerVersion=%q: %v", checksumsPath, mcpServerVersion, err)
+		t.Fatalf(
+			"expected checksums file %q for mcpServerVersion=%q: %v",
+			checksumsPath,
+			mcpServerVersion,
+			err,
+		)
 	}
 }
 
@@ -148,7 +200,10 @@ func TestBundledChecksumConstantMatchesChecksumsFile(t *testing.T) {
 	}
 
 	version := strings.TrimPrefix(mcpServerVersion, "v")
-	checksumsPath := filepath.Join("bundled", fmt.Sprintf("github-mcp-server_%s_checksums.txt", version))
+	checksumsPath := filepath.Join(
+		"bundled",
+		fmt.Sprintf("github-mcp-server_%s_checksums.txt", version),
+	)
 
 	content, err := os.ReadFile(checksumsPath)
 	if err != nil {
