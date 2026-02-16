@@ -13,8 +13,27 @@ tasks:
     cmds:
       - task --list
 
+  bundled:prepare:
+    desc: Download and verify bundled github-mcp-server archives
+    vars:
+      MCP_SERVER_VERSION:
+        sh: 'sed -nE ''s/^const mcpServerVersion = "(v[^"]+)"$/\1/p'' mcp_version.go | sed ''s/^v//'''
+    status:
+      - test -f bundled/github-mcp-server_{{.MCP_SERVER_VERSION}}_checksums.txt
+      - test -f bundled/github-mcp-server_Darwin_arm64.tar.gz
+      - test -f bundled/github-mcp-server_Darwin_x86_64.tar.gz
+      - test -f bundled/github-mcp-server_Linux_i386.tar.gz
+      - test -f bundled/github-mcp-server_Linux_arm64.tar.gz
+      - test -f bundled/github-mcp-server_Linux_x86_64.tar.gz
+      - test -f bundled/github-mcp-server_Windows_arm64.zip
+      - test -f bundled/github-mcp-server_Windows_i386.zip
+      - test -f bundled/github-mcp-server_Windows_x86_64.zip
+    cmds:
+      - ./scripts/prepare-bundled-mcp-server.sh
+
   build:
     desc: Build the binary
+    deps: [bundled:prepare]
     sources:
       - "**/*.go"
       - "bundled/*"
@@ -41,6 +60,7 @@ tasks:
     cmds:
       - rm -f {{.BINARY_NAME}}
       - rm -f {{.COVERAGE_FILE}} coverage.html
+      - rm -f bundled/github-mcp-server_*
       - go clean
 
   run:
@@ -51,11 +71,13 @@ tasks:
 
   test:
     desc: Run tests with race detection and shuffle (10 times)
+    deps: [bundled:prepare]
     cmds:
       - go test -race -shuffle=on -count=10 ./...
 
   test:coverage:
     desc: Run tests with coverage report
+    deps: [bundled:prepare]
     preconditions:
       - sh: command -v octocov
         msg: "octocov is not installed. Please install it first."
@@ -65,6 +87,7 @@ tasks:
 
   test:verbose:
     desc: Run tests with verbose output
+    deps: [bundled:prepare]
     cmds:
       - go test -v -race ./...
 
@@ -84,6 +107,7 @@ tasks:
     deps:
       - task: install:golangci-lint
         silent: true
+      - task: bundled:prepare
     cmds:
       - cmd: "{{.BIN_DIR}}/golangci-lint version"
         silent: true
