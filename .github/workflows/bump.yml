@@ -15,7 +15,7 @@ concurrency:
 jobs:
   renovate:
     runs-on: ubuntu-latest
-    if: github.event.action == 'labeled' && startsWith(github.head_ref, 'renovate/') && startsWith(github.event.label.name, 'renovate:')
+    if: startsWith(github.head_ref, 'renovate/') && (contains(github.event.pull_request.labels.*.name, 'renovate:major') || contains(github.event.pull_request.labels.*.name, 'renovate:minor'))
     timeout-minutes: 20
     permissions:
       contents: write
@@ -47,7 +47,7 @@ jobs:
 
       - name: Bump minor version
         id: bump-minor
-        if: steps.check.outputs.skip != 'true' && github.event.label.name == 'renovate:minor'
+        if: steps.check.outputs.skip != 'true' && contains(github.event.pull_request.labels.*.name, 'renovate:minor') && !contains(github.event.pull_request.labels.*.name, 'renovate:major')
         run: |
           set -euo pipefail
           ver=$(cat VERSION 2>/dev/null || echo "0.0.0")
@@ -62,7 +62,7 @@ jobs:
 
       - name: Bump major version
         id: bump-major
-        if: steps.check.outputs.skip != 'true' && github.event.label.name == 'renovate:major'
+        if: steps.check.outputs.skip != 'true' && contains(github.event.pull_request.labels.*.name, 'renovate:major')
         run: |
           set -euo pipefail
           ver=$(cat VERSION 2>/dev/null || echo "0.0.0")
