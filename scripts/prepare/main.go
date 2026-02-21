@@ -562,6 +562,7 @@ func runGHCommand(ctx context.Context, stdout io.Writer, stderr io.Writer, args 
 }
 
 func loadChecksums(checksumsFile string) (map[string]string, error) {
+	// #nosec G703 -- paths are constructed from controlled constants via filepath.Join
 	file, err := os.Open(checksumsFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read checksums file %q: %w", checksumsFile, err)
@@ -637,10 +638,12 @@ func promoteStagedAsset(stagingDir string, bundledDir string, assetName string) 
 	dst := filepath.Join(bundledDir, assetName)
 
 	// Keep explicit remove for Windows where Rename does not replace existing files.
+	// #nosec G703 -- paths are constructed from controlled constants via filepath.Join
 	if err := os.Remove(dst); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("failed to remove existing asset %s: %w", dst, err)
 	}
 
+	// #nosec G703 -- paths are constructed from controlled constants via filepath.Join
 	if err := os.Rename(src, dst); err != nil {
 		return fmt.Errorf("failed to promote %s to %s: %w", src, dst, err)
 	}

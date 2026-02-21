@@ -106,6 +106,7 @@ func createTempDirInVerifiedParent(
 		)
 	}
 
+	// #nosec G115 -- file descriptors are small non-negative integers on Unix
 	parentFD := int(parentState.handle.Fd())
 
 	for range tempDirNameAttempts {
