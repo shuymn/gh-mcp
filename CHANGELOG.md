@@ -1,5 +1,8 @@
 # Changelog
 
+## [v2.0.2](https://github.com/shuymn/gh-mcp/compare/v2.0.1...v2.0.2) - 2026-02-21
+- fix(workflow): check PR labels for version bumping by @shuymn in https://github.com/shuymn/gh-mcp/pull/172
+
 ## [v2.0.1](https://github.com/shuymn/gh-mcp/compare/v2.0.0...v2.0.1) - 2026-02-21
 - ci(workflow): add concurrency and push retry by @shuymn in https://github.com/shuymn/gh-mcp/pull/168
 - chore(deps): update songmu/tagpr action to v1.17.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/165
