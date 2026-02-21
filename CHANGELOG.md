@@ -1,5 +1,13 @@
 # Changelog
 
+## [v2.0.1](https://github.com/shuymn/gh-mcp/compare/v2.0.0...v2.0.1) - 2026-02-21
+- ci(workflow): add concurrency and push retry by @shuymn in https://github.com/shuymn/gh-mcp/pull/168
+- chore(deps): update songmu/tagpr action to v1.17.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/165
+- ci(workflow): trigger CI after bump and bundle operations by @shuymn in https://github.com/shuymn/gh-mcp/pull/170
+- chore(deps): update dependency golangci/golangci-lint to v2.10.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/167
+- ci: replace GITHUB_TOKEN with GitHub App token by @shuymn in https://github.com/shuymn/gh-mcp/pull/171
+- chore(deps): update dependency github/github-mcp-server to v0.31.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/166
+
 ## [v2.0.0](https://github.com/shuymn/gh-mcp/compare/v1.16.1...v2.0.0) - 2026-02-16
 - chore(deps): update dependency golangci/golangci-lint to v2.9.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/159
 - chore(deps): update dependency go to v1.26.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/158
