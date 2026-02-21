@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 concurrency:
   group: bump-${{ github.event.pull_request.number }}
@@ -20,13 +19,20 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
-      actions: write
 
     steps:
+      - name: Create app token
+        id: app-token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+          permission-contents: write
+
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          token: ${{ github.token }}
+          token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
           ref: ${{ github.head_ref }}
           fetch-depth: 0
@@ -68,10 +74,9 @@ jobs:
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Commit and push if version changed
-        id: push-version
         if: steps.bump-minor.outputs.changed == 'true' || steps.bump-major.outputs.changed == 'true'
         env:
-          PUSH_TOKEN: ${{ github.token }}
+          PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           new=$(cat VERSION)
@@ -81,19 +86,16 @@ jobs:
           git add VERSION
           if git diff --cached --quiet; then
             echo "No version changes detected"
-            echo "pushed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git commit -m "chore: bump version to ${new:?}"
 
           for attempt in 1 2 3; do
             if git push "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:"${GITHUB_HEAD_REF:?}"; then
-              echo "pushed=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             if [[ "${attempt}" -eq 3 ]]; then
               echo "Push failed after ${attempt} attempts"
-              echo "pushed=false" >> "$GITHUB_OUTPUT"
               exit 1
             fi
             echo "Push rejected; rebasing on origin/${GITHUB_HEAD_REF:?} and retrying..."
@@ -101,27 +103,26 @@ jobs:
             git rebase "origin/${GITHUB_HEAD_REF:?}"
           done
 
-      - name: Trigger CI workflow
-        if: steps.push-version.outputs.pushed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh workflow run .github/workflows/ci.yml --ref "${GITHUB_HEAD_REF:?}"
-
   refresh-bundled-mcp-server:
     runs-on: ubuntu-latest
     if: startsWith(github.head_ref, 'renovate/') && github.event.action != 'labeled'
     timeout-minutes: 20
     permissions:
       contents: write
-      actions: write
 
     steps:
+      - name: Create app token
+        id: app-token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+          permission-contents: write
+
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          token: ${{ github.token }}
+          token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
           ref: ${{ github.head_ref }}
           fetch-depth: 0
@@ -152,21 +153,19 @@ jobs:
       - name: Refresh bundled assets
         if: steps.check-target.outputs.run == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           ./scripts/update-bundled-mcp-server.sh "${{ steps.version.outputs.value }}"
 
       - name: Commit and push refreshed bundle
-        id: push-bundle
         if: steps.check-target.outputs.run == 'true'
         env:
-          PUSH_TOKEN: ${{ github.token }}
+          PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           if [[ -z "$(git status --porcelain -- mcp_version.go bundle_*.go)" ]]; then
             echo "No bundled asset changes detected"
-            echo "pushed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -177,23 +176,13 @@ jobs:
 
           for attempt in 1 2 3; do
             if git push "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:"${GITHUB_HEAD_REF:?}"; then
-              echo "pushed=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             if [[ "${attempt}" -eq 3 ]]; then
               echo "Push failed after ${attempt} attempts"
-              echo "pushed=false" >> "$GITHUB_OUTPUT"
               exit 1
             fi
             echo "Push rejected; rebasing on origin/${GITHUB_HEAD_REF:?} and retrying..."
             git fetch origin "${GITHUB_HEAD_REF:?}"
             git rebase "origin/${GITHUB_HEAD_REF:?}"
           done
-
-      - name: Trigger CI workflow
-        if: steps.push-bundle.outputs.pushed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh workflow run .github/workflows/ci.yml --ref "${GITHUB_HEAD_REF:?}"
