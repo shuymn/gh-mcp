@@ -254,9 +254,6 @@ func checkBundledAssets(version string) error {
 
 	for _, asset := range assets {
 		filePath := filepath.Join(bundledDirName, asset)
-		if _, err := os.Stat(filePath); err != nil {
-			return fmt.Errorf("failed to stat bundled asset %s: %w", filePath, err)
-		}
 		if err := verifyAssetChecksum(checksums, asset, filePath, checksumsFile); err != nil {
 			return err
 		}
