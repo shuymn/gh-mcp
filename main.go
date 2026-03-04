@@ -61,19 +61,10 @@ type runner interface {
 }
 
 // realRunner implements runner using actual implementations
-type realRunner struct {
-	authInterface authInterface
-}
+type realRunner struct{}
 
 func (r *realRunner) getAuth() (*authDetails, error) {
-	return getAuthDetails(r.getAuthInterface())
-}
-
-func (r *realRunner) getAuthInterface() authInterface {
-	if r.authInterface == nil {
-		r.authInterface = &realAuth{}
-	}
-	return r.authInterface
+	return getAuthDetails(&realAuth{})
 }
 
 func (r *realRunner) runServer(
