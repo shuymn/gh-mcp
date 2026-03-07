@@ -1,5 +1,13 @@
 # Changelog
 
+## [v2.1.0](https://github.com/shuymn/gh-mcp/compare/v2.0.1...v2.1.0) - 2026-03-07
+- fix(workflow): check PR labels for version bumping by @shuymn in https://github.com/shuymn/gh-mcp/pull/172
+- refactor: remove redundant prechecks by @shuymn in https://github.com/shuymn/gh-mcp/pull/174
+- chore(deps): update actions/upload-artifact action to v7 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/178
+- chore(deps): update dependency github/github-mcp-server to v0.32.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/177
+- chore(deps): update actions/setup-go action to v6.3.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/176
+- chore(deps): update songmu/tagpr action to v1.17.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/175
+
 ## [v2.0.1](https://github.com/shuymn/gh-mcp/compare/v2.0.0...v2.0.1) - 2026-02-21
 - ci(workflow): add concurrency and push retry by @shuymn in https://github.com/shuymn/gh-mcp/pull/168
 - chore(deps): update songmu/tagpr action to v1.17.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/165
