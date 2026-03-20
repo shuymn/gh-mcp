@@ -1,5 +1,11 @@
 # Changelog
 
+## [v2.1.1](https://github.com/shuymn/gh-mcp/compare/v2.1.0...v2.1.1) - 2026-03-20
+- chore(deps): update dependency go to v1.26.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/179
+- chore(deps): update actions/create-github-app-token action to v3 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/184
+- fix(deps): update module golang.org/x/sys to v0.42.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/181
+- chore(deps): update dependency golangci/golangci-lint to v2.11.3 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/180
+
 ## [v2.1.0](https://github.com/shuymn/gh-mcp/compare/v2.0.1...v2.1.0) - 2026-03-07
 - fix(workflow): check PR labels for version bumping by @shuymn in https://github.com/shuymn/gh-mcp/pull/172
 - refactor: remove redundant prechecks by @shuymn in https://github.com/shuymn/gh-mcp/pull/174
