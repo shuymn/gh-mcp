@@ -1,5 +1,8 @@
 # Changelog
 
+## [v3.0.0](https://github.com/shuymn/gh-mcp/compare/v2.2.0...v3.0.0) - 2026-04-17
+- chore(deps): update dependency github/github-mcp-server to v1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/196
+
 ## [v2.2.0](https://github.com/shuymn/gh-mcp/compare/v2.1.0...v2.2.0) - 2026-04-17
 - chore(deps): update dependency go to v1.26.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/179
 - chore(deps): update actions/create-github-app-token action to v3 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/184
