@@ -1,5 +1,22 @@
 # Changelog
 
+## [v2.2.0](https://github.com/shuymn/gh-mcp/compare/v2.1.0...v2.2.0) - 2026-04-17
+- chore(deps): update dependency go to v1.26.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/179
+- chore(deps): update actions/create-github-app-token action to v3 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/184
+- fix(deps): update module golang.org/x/sys to v0.42.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/181
+- chore(deps): update dependency golangci/golangci-lint to v2.11.3 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/180
+- chore(deps): update actions/cache action to v5.0.4 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/185
+- chore(deps): update actions/setup-go action to v6.4.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/187
+- chore(deps): update dependency golangci/golangci-lint to v2.11.4 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/186
+- chore(deps): update dependency go to v1.26.2 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/190
+- fix(deps): update module golang.org/x/sys to v0.43.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/189
+- chore(deps): update songmu/tagpr action to v1.18.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/188
+- chore(deps): update dependency github/github-mcp-server to v0.33.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/193
+- chore(deps): update actions/upload-artifact action to v7.0.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/191
+- chore(deps): update actions/create-github-app-token action to v3.1.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/192
+- chore(deps): update songmu/tagpr action to v1.18.2 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/194
+- chore(deps): update actions/cache action to v5.0.5 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/195
+
 ## [v2.1.0](https://github.com/shuymn/gh-mcp/compare/v2.0.1...v2.1.0) - 2026-03-07
 - fix(workflow): check PR labels for version bumping by @shuymn in https://github.com/shuymn/gh-mcp/pull/172
 - refactor: remove redundant prechecks by @shuymn in https://github.com/shuymn/gh-mcp/pull/174
