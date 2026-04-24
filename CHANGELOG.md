@@ -1,5 +1,10 @@
 # Changelog
 
+## [v3.0.1](https://github.com/shuymn/gh-mcp/compare/v3.0.0...v3.0.1) - 2026-04-24
+- chore(deps): update dependency github/github-mcp-server to v1.0.2 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/199
+- chore(deps): update songmu/tagpr action to v1.18.3 - autoclosed by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/198
+- chore(deps): update dependency github/github-mcp-server to v1.0.3 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/201
+
 ## [v3.0.0](https://github.com/shuymn/gh-mcp/compare/v2.2.0...v3.0.0) - 2026-04-17
 - chore(deps): update dependency github/github-mcp-server to v1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/196
 
