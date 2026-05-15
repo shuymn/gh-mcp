@@ -1,5 +1,8 @@
 # Changelog
 
+## [v3.0.3](https://github.com/shuymn/gh-mcp/compare/v3.0.2...v3.0.3) - 2026-05-15
+- chore(deps): update songmu/tagpr action to v1.19.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/208
+
 ## [v3.0.2](https://github.com/shuymn/gh-mcp/compare/v3.0.1...v3.0.2) - 2026-05-11
 - chore(deps): update go toolchain directive to v1.26.3 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/205
 - chore(deps): update dependency github/github-mcp-server to v1.0.4 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/207
