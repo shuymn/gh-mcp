@@ -1,5 +1,10 @@
 # Changelog
 
+## [v3.1.0](https://github.com/shuymn/gh-mcp/compare/v3.0.3...v3.1.0) - 2026-06-02
+- chore(deps): update dependency github/github-mcp-server to v1.1.2 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/214
+- fix(deps): update module golang.org/x/sys to v0.45.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/212
+- chore(deps): update golangci/golangci-lint-action action to v9.2.1 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/213
+
 ## [v3.0.3](https://github.com/shuymn/gh-mcp/compare/v3.0.2...v3.0.3) - 2026-05-20
 - chore(deps): update songmu/tagpr action to v1.19.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/208
 - chore(deps): update dependency github/github-mcp-server to v1.0.5 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/211
