@@ -1,5 +1,9 @@
 # Changelog
 
+## [v3.3.0](https://github.com/shuymn/gh-mcp/compare/v3.2.0...v3.3.0) - 2026-06-13
+
+- chore(deps): update dependency github/github-mcp-server to v1.3.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/222
+
 ## [v3.2.0](https://github.com/shuymn/gh-mcp/compare/v3.1.0...v3.2.0) - 2026-06-09
 
 - chore(deps): update go toolchain directive to v1.26.4 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/217
