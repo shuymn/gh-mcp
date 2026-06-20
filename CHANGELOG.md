@@ -1,5 +1,9 @@
 # Changelog
 
+## [v3.4.0](https://github.com/shuymn/gh-mcp/compare/v3.3.0...v3.4.0) - 2026-06-19
+
+- chore(deps): update dependency github/github-mcp-server to v1.4.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/224
+
 ## [v3.3.0](https://github.com/shuymn/gh-mcp/compare/v3.2.0...v3.3.0) - 2026-06-13
 
 - chore(deps): update dependency github/github-mcp-server to v1.3.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/222
