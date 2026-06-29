@@ -1,5 +1,13 @@
 # Changelog
 
+## [v3.5.0](https://github.com/shuymn/gh-mcp/compare/v3.4.0...v3.5.0) - 2026-06-29
+
+- chore(deps): update dependency github/github-mcp-server to v1.5.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/230
+- chore(deps): update actions/setup-go action to v6.5.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/229
+- chore(deps): update actions/cache action to v6 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/228
+- chore(deps): update cli/gh-extension-precompile action to v2.2.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/227
+- chore(deps): update actions/checkout action to v7 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/226
+
 ## [v3.4.0](https://github.com/shuymn/gh-mcp/compare/v3.3.0...v3.4.0) - 2026-06-19
 
 - chore(deps): update dependency github/github-mcp-server to v1.4.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/224
