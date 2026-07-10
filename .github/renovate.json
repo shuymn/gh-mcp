@@ -37,26 +37,16 @@
     {
       "matchDatasources": ["github-releases"],
       "matchPackageNames": ["github/github-mcp-server"],
-      "automerge": false,
-      "minimumReleaseAge": "0 days"
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "minimumReleaseAge": "1 day",
+      "internalChecksFilter": "strict"
     },
     {
       "matchDatasources": ["github-releases"],
       "matchPackageNames": ["github/github-mcp-server"],
       "matchUpdateTypes": ["major"],
       "addLabels": ["renovate:major", "dependencies"]
-    },
-    {
-      "matchDatasources": ["github-releases"],
-      "matchPackageNames": ["github/github-mcp-server"],
-      "matchUpdateTypes": ["minor"],
-      "addLabels": ["renovate:minor", "dependencies"]
-    },
-    {
-      "matchDatasources": ["github-releases"],
-      "matchPackageNames": ["github/github-mcp-server"],
-      "matchUpdateTypes": ["patch"],
-      "addLabels": ["dependencies"]
     }
   ]
 }

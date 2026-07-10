@@ -1,5 +1,9 @@
 # Changelog
 
+> Releases after v3.5.0 use GitHub-generated notes. The
+> [GitHub Releases](https://github.com/shuymn/gh-mcp/releases) page is the canonical
+> release history; this file is retained for earlier releases.
+
 ## [v3.5.0](https://github.com/shuymn/gh-mcp/compare/v3.4.0...v3.5.0) - 2026-06-29
 
 - chore(deps): update dependency github/github-mcp-server to v1.5.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/230

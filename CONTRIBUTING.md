@@ -132,13 +132,24 @@ The project consists of three main components:
 
 ## Release Process
 
-Releases are automated via GitHub Actions:
+Stable `github-mcp-server` updates are released through an automated pipeline:
 
-1. Tag the version: `git tag v1.0.0`
-2. Push the tag: `git push origin v1.0.0`
-3. GitHub Actions automatically builds and releases for all platforms
+1. After a one-day stabilization window, Renovate opens one update PR for
+   `mcp_version.go`.
+2. `Prepare upstream release` verifies the upstream attestations and checksums, updates
+   `VERSION` and the pinned archive hashes in one commit, and pushes it to the PR.
+3. Patch and minor updates merge automatically after the required CI checks pass. Major
+   updates remain open for compatibility review.
+4. After the merge commit passes CI on `main`, `Release` creates the version tag, builds
+   all extension artifacts, generates build-provenance attestations, and publishes the
+   GitHub release.
 
-The release workflow handles all cross-platform compilation and artifact generation.
+Release jobs are serialized. If CI completion order is inverted, an older candidate
+verifies the newer immutable release and exits instead of publishing versions backward.
+
+For a project-only release, bump `VERSION` in a normal PR. The same CI-gated release path
+runs after merge. If the `Release` job fails, rerun that failed CI job; it resumes an
+existing draft for the same tested commit and never rewrites a published release.
 
 ## Code Style
 

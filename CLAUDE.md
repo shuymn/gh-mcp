@@ -80,11 +80,17 @@ The project consists of three main components:
    - Provides user feedback with emoji status messages
    - Uses dependency injection for testing
 
-4. **Release Automation**: The `.github/workflows/release.yml` workflow:
-   - Triggers on version tags (e.g., `v1.0.0`)
-   - Uses `cli/gh-extension-precompile@v2` for multi-platform builds
-   - Generates attestations for security
-   - Creates GitHub releases automatically
+4. **Release Automation**:
+   - Renovate detects stable `github-mcp-server` releases
+   - `.github/workflows/bump.yml` verifies upstream provenance and prepares `VERSION` plus
+     pinned archive hashes in the Renovate PR
+   - Patch and minor upstream updates auto-merge after required CI; major updates require
+     compatibility review
+   - CI calls `.github/workflows/release.yml` only after a successful `main` build; the
+     reusable workflow creates an idempotent version tag and draft release, builds with
+     `cli/gh-extension-precompile@v2`, generates attestations, and publishes the release
+   - Serialized release jobs never publish backward; an older run verifies the newer
+     immutable release and exits when CI completion order is inverted
 
 ## Development Patterns
 
@@ -102,8 +108,8 @@ When extending this CLI:
 
 ## Release Process
 
-1. Tag the version: `git tag v1.0.0`
-2. Push the tag: `git push origin v1.0.0`
-3. GitHub Actions automatically builds and releases for all platforms
+Normal upstream releases require no manual tag or release PR. Renovate opens the update PR,
+the prepare workflow updates release metadata, and successful `main` CI triggers the release.
 
-The release workflow handles all cross-platform compilation and artifact generation.
+For a project-only release, update `VERSION` in a normal PR. Recover a failed release by
+rerunning the failed `Release` job in the same CI run so the tested commit remains fixed.

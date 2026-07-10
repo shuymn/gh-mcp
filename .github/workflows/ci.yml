@@ -2,14 +2,14 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 permissions:
   contents: read
-  actions: read  # Required for octocov to read artifacts
-  pull-requests: write  # Required for octocov to comment on PRs
+  actions: read # Required for octocov to read artifacts
+  pull-requests: write # Required for octocov to comment on PRs
 
 jobs:
   lint:
@@ -20,61 +20,68 @@ jobs:
       contents: read
 
     steps:
-    - name: Check if tagpr branch
-      id: check-branch
-      shell: pwsh
-      env:
-        BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-      run: |
-        if ("$env:BRANCH_NAME" -like "tagpr-from-v*") {
-          "skip=true" >> $env:GITHUB_OUTPUT
-        } else {
-          "skip=false" >> $env:GITHUB_OUTPUT
-        }
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-    - name: Checkout code
-      if: steps.check-branch.outputs.skip != 'true'
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      with:
-        persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: stable
+          cache: true
 
-    - name: Set up Go
-      if: steps.check-branch.outputs.skip != 'true'
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-      with:
-        go-version: stable
-        cache: true
+      - name: Verify release version bump
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
 
-    - name: Restore bundled assets cache
-      if: steps.check-branch.outputs.skip != 'true'
-      id: bundled-cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: bundled/github-mcp-server_*
-        key: bundled-assets-${{ hashFiles('bundle_*.go', 'mcp_version.go') }}
-        enableCrossOsArchive: true
+          current_upstream="$(
+            git show "${BASE_SHA:?}:mcp_version.go" |
+              sed -nE 's/^const mcpServerVersion = "(v[^"]+)"$/\1/p'
+          )"
+          next_upstream="$(
+            sed -nE 's/^const mcpServerVersion = "(v[^"]+)"$/\1/p' mcp_version.go
+          )"
+          current_release="$(git show "${BASE_SHA}:VERSION")"
+          next_release="$(cat VERSION)"
 
-    - name: Prepare bundled assets
-      if: steps.check-branch.outputs.skip != 'true' && steps.bundled-cache.outputs.cache-hit != 'true'
-      run: go run ./scripts/prepare
-      env:
-        GH_TOKEN: ${{ github.token }}
+          go run ./scripts/release-version validate \
+            "$current_release" \
+            "$next_release" \
+            "$current_upstream" \
+            "$next_upstream"
 
-    - name: Verify bundled assets
-      if: steps.check-branch.outputs.skip != 'true'
-      run: go run ./scripts/prepare -check
+      - name: Restore bundled assets cache
+        id: bundled-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bundled/github-mcp-server_*
+          key: bundled-assets-${{ hashFiles('bundle_*.go', 'mcp_version.go') }}
+          enableCrossOsArchive: true
 
-    - name: Set golangci-lint version
-      if: steps.check-branch.outputs.skip != 'true'
-      id: set-golangci-lint-version
-      run: echo "version=$(yq '.vars.GOLANGCI_LINT_VERSION' Taskfile.yml)" >> "$GITHUB_OUTPUT"
+      - name: Prepare bundled assets
+        if: steps.bundled-cache.outputs.cache-hit != 'true'
+        run: go run ./scripts/prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
 
-    - name: Run golangci-lint
-      if: steps.check-branch.outputs.skip != 'true'
-      uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9.2.1
-      with:
-        version: ${{ steps.set-golangci-lint-version.outputs.version }}
-        args: --timeout=5m
+      - name: Verify bundled assets
+        run: go run ./scripts/prepare -check
+
+      - name: Set golangci-lint version
+        id: set-golangci-lint-version
+        run: echo "version=$(yq '.vars.GOLANGCI_LINT_VERSION' Taskfile.yml)" >> "$GITHUB_OUTPUT"
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9.2.1
+        with:
+          version: ${{ steps.set-golangci-lint-version.outputs.version }}
+          args: --timeout=5m
 
   test:
     name: Test (${{ matrix.os }})
@@ -91,68 +98,49 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - name: Check if tagpr branch
-      id: check-branch
-      shell: pwsh
-      env:
-        BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-      run: |
-        if ("$env:BRANCH_NAME" -like "tagpr-from-v*") {
-          "skip=true" >> $env:GITHUB_OUTPUT
-        } else {
-          "skip=false" >> $env:GITHUB_OUTPUT
-        }
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
-    - name: Checkout code
-      if: steps.check-branch.outputs.skip != 'true'
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      with:
-        persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: stable
+          cache: true
 
-    - name: Set up Go
-      if: steps.check-branch.outputs.skip != 'true'
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-      with:
-        go-version: stable
-        cache: true
+      - name: Restore bundled assets cache
+        id: bundled-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bundled/github-mcp-server_*
+          key: bundled-assets-${{ hashFiles('bundle_*.go', 'mcp_version.go') }}
+          enableCrossOsArchive: true
 
-    - name: Restore bundled assets cache
-      if: steps.check-branch.outputs.skip != 'true'
-      id: bundled-cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: bundled/github-mcp-server_*
-        key: bundled-assets-${{ hashFiles('bundle_*.go', 'mcp_version.go') }}
-        enableCrossOsArchive: true
+      - name: Prepare bundled assets
+        if: steps.bundled-cache.outputs.cache-hit != 'true'
+        run: go run ./scripts/prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
 
-    - name: Prepare bundled assets
-      if: steps.check-branch.outputs.skip != 'true' && steps.bundled-cache.outputs.cache-hit != 'true'
-      run: go run ./scripts/prepare
-      env:
-        GH_TOKEN: ${{ github.token }}
+      - name: Verify bundled assets
+        run: go run ./scripts/prepare -check
 
-    - name: Verify bundled assets
-      if: steps.check-branch.outputs.skip != 'true'
-      run: go run ./scripts/prepare -check
+      - name: Download dependencies
+        run: go mod download
 
-    - name: Download dependencies
-      if: steps.check-branch.outputs.skip != 'true'
-      run: go mod download
+      - name: Verify dependencies
+        run: go mod verify
 
-    - name: Verify dependencies
-      if: steps.check-branch.outputs.skip != 'true'
-      run: go mod verify
+      - name: Run tests
+        run: go test -race -shuffle=on -count=10 ./...
 
-    - name: Run tests
-      if: steps.check-branch.outputs.skip != 'true'
-      run: go test -race -shuffle=on -count=10 ./...
+      - name: Run tests with coverage
+        if: matrix.os == 'ubuntu-latest'
+        run: go test -race -coverprofile=coverage.out ./...
 
-    - name: Run tests with coverage
-      if: steps.check-branch.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
-      run: go test -race -coverprofile=coverage.out ./...
-
-    - uses: k1LoW/octocov-action@b3b6ee60482a667950f87553abf1df63217235d9 # v1.5.1
-      if: steps.check-branch.outputs.skip != 'true' && matrix.os == 'ubuntu-latest'
+      - if: matrix.os == 'ubuntu-latest'
+        uses: k1LoW/octocov-action@b3b6ee60482a667950f87553abf1df63217235d9 # v1.5.1
 
   build:
     name: Build
@@ -163,65 +151,60 @@ jobs:
       contents: read
 
     steps:
-    - name: Check if tagpr branch
-      id: check-branch
-      shell: pwsh
-      env:
-        BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-      run: |
-        if ("$env:BRANCH_NAME" -like "tagpr-from-v*") {
-          "skip=true" >> $env:GITHUB_OUTPUT
-        } else {
-          "skip=false" >> $env:GITHUB_OUTPUT
-        }
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
-    - name: Checkout code
-      if: steps.check-branch.outputs.skip != 'true'
-      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      with:
-        persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: stable
+          cache: true
 
-    - name: Set up Go
-      if: steps.check-branch.outputs.skip != 'true'
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-      with:
-        go-version: stable
-        cache: true
+      - name: Restore bundled assets cache
+        id: bundled-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bundled/github-mcp-server_*
+          key: bundled-assets-${{ hashFiles('bundle_*.go', 'mcp_version.go') }}
+          enableCrossOsArchive: true
 
-    - name: Restore bundled assets cache
-      if: steps.check-branch.outputs.skip != 'true'
-      id: bundled-cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: bundled/github-mcp-server_*
-        key: bundled-assets-${{ hashFiles('bundle_*.go', 'mcp_version.go') }}
-        enableCrossOsArchive: true
+      - name: Prepare bundled assets
+        if: steps.bundled-cache.outputs.cache-hit != 'true'
+        run: go run ./scripts/prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
 
-    - name: Prepare bundled assets
-      if: steps.check-branch.outputs.skip != 'true' && steps.bundled-cache.outputs.cache-hit != 'true'
-      run: go run ./scripts/prepare
-      env:
-        GH_TOKEN: ${{ github.token }}
+      - name: Verify bundled assets
+        run: go run ./scripts/prepare -check
 
-    - name: Verify bundled assets
-      if: steps.check-branch.outputs.skip != 'true'
-      run: go run ./scripts/prepare -check
+      - name: Build binary
+        run: go build -o gh-mcp .
 
-    - name: Build binary
-      if: steps.check-branch.outputs.skip != 'true'
-      run: go build -o gh-mcp .
+      - name: Verify binary artifact
+        run: |
+          test -f gh-mcp
+          test -x gh-mcp
 
-    - name: Test binary exists and is executable
-      if: steps.check-branch.outputs.skip != 'true'
-      run: |
-        test -f gh-mcp
-        test -x gh-mcp
-        ./gh-mcp --version || true
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gh-mcp-linux-amd64
+          path: gh-mcp
+          retention-days: 7
 
-    - name: Upload artifact
-      if: steps.check-branch.outputs.skip != 'true'
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: gh-mcp-linux-amd64
-        path: gh-mcp
-        retention-days: 7
+  release:
+    name: Release
+    needs: build
+    if: >-
+      github.event_name == 'push' &&
+      github.repository == 'shuymn/gh-mcp' &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/release.yml
+    with:
+      target_sha: ${{ github.sha }}
