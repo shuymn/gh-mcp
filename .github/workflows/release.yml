@@ -34,7 +34,6 @@ concurrency:
 jobs:
   release:
     if: >-
-      github.event_name == 'push' &&
       github.repository == 'shuymn/gh-mcp' &&
       github.ref == 'refs/heads/main' &&
       inputs.target_sha == github.sha

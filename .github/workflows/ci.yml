@@ -30,10 +30,11 @@ jobs:
           go-version: stable
           cache: true
 
-      - name: Verify release version bump
-        if: github.event_name == 'pull_request'
+      - name: Verify release version transition
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: >-
+            ${{ github.event_name == 'pull_request' &&
+            github.event.pull_request.base.sha || github.event.before }}
         shell: bash
         run: |
           set -euo pipefail
