@@ -8,8 +8,6 @@ on:
 
 permissions:
   contents: read
-  actions: read # Required for octocov to read artifacts
-  pull-requests: write # Required for octocov to comment on PRs
 
 jobs:
   lint:
