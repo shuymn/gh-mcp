@@ -1,5 +1,10 @@
 # Changelog
 
+## [v3.5.1](https://github.com/shuymn/gh-mcp/compare/v3.5.0...v3.5.1) - 2026-07-10
+
+- chore(deps): update actions/cache action to v6.1.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/232
+- chore(deps): update go toolchain directive to v1.26.5 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/236
+
 ## [v3.5.0](https://github.com/shuymn/gh-mcp/compare/v3.4.0...v3.5.0) - 2026-06-29
 
 - chore(deps): update dependency github/github-mcp-server to v1.5.0 by @renovate[bot] in https://github.com/shuymn/gh-mcp/pull/230
