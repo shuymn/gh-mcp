@@ -1,77 +1,135 @@
-name: release
+name: Publish release
+
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_call:
+    inputs:
+      target_sha:
+        description: Commit that passed the caller's CI jobs
+        required: true
+        type: string
+
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+  queue: max
 
 jobs:
   release:
+    if: >-
+      github.repository == 'shuymn/gh-mcp' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.target_sha == github.sha
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: write
       id-token: write
       attestations: write
+
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Checkout tested commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          ref: ${{ inputs.target_sha }}
+          fetch-depth: 0
           persist-credentials: false
 
+      - name: Select release
+        id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+        shell: bash
+        run: scripts/workflows/release.sh select
+
+      - name: Restore published provenance verification
+        if: steps.candidate.outputs.published == 'true'
+        id: provenance-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .release-provenance
+          key: >-
+            release-provenance-${{ steps.candidate.outputs.tag }}-${{
+            steps.candidate.outputs.tag_target }}-${{
+            hashFiles('scripts/workflows/release.sh',
+            '.github/workflows/release.yml') }}
+
+      - name: Verify published release provenance
+        if: >-
+          steps.candidate.outputs.published == 'true' &&
+          steps.provenance-cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.candidate.outputs.tag }}
+          SOURCE_DIGEST: ${{ steps.candidate.outputs.tag_target }}
+        shell: bash
+        run: scripts/workflows/release.sh verify-published
+
       - name: Set up Go
+        if: steps.candidate.outputs.publish == 'true'
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
           cache: true
 
-      - name: Prepare bundled assets
-        run: go run ./scripts/prepare
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Restore bundled assets cache
+        if: steps.candidate.outputs.publish == 'true'
+        id: bundled-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bundled/github-mcp-server_*
+          key: bundled-assets-${{ hashFiles('bundle_*.go', 'mcp_version.go') }}
+          enableCrossOsArchive: true
 
-      - id: determine_release_tag
+      - name: Prepare bundled assets
+        if: >-
+          steps.candidate.outputs.publish == 'true' &&
+          steps.bundled-cache.outputs.cache-hit != 'true'
         env:
-          GH_PAGER: cat
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
+          go run ./scripts/prepare
 
-          if [[ ${GITHUB_REF} = refs/tags/* ]]; then
-            tag="${GITHUB_REF#refs/tags/}"
-          else
-            tag="$(git describe --tags --abbrev=0)"
-          fi
+      - name: Verify bundled assets
+        if: steps.candidate.outputs.publish == 'true'
+        run: go run ./scripts/prepare -check
 
-          is_draft=$(gh release view "$tag" --json isDraft -q '.isDraft' || echo "false")
-          if [[ ${is_draft} != "true" ]]; then
-            echo "Release $tag is not a draft or does not exist. Exiting."
-            exit 1
-          fi
+      - name: Create release tag
+        if: steps.candidate.outputs.create_tag == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.candidate.outputs.tag }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+        shell: bash
+        run: scripts/workflows/release.sh create-tag
 
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-
-      - uses: cli/gh-extension-precompile@76961aa3bd1123d0a6fd42d0a41aca0696937c39 # v2.2.0
+      - name: Build draft release
+        if: steps.candidate.outputs.publish == 'true'
+        uses: cli/gh-extension-precompile@76961aa3bd1123d0a6fd42d0a41aca0696937c39 # v2.2.0
         with:
+          draft_release: true
           generate_attestations: true
           go_version_file: go.mod
-          release_tag: ${{ steps.determine_release_tag.outputs.tag }}
+          release_tag: ${{ steps.candidate.outputs.tag }}
 
-      - name: Publish draft release if exists
+      - name: Verify draft release provenance
+        if: steps.candidate.outputs.publish == 'true'
         env:
-          RELEASE_TAG: ${{ steps.determine_release_tag.outputs.tag }}
-          GH_PAGER: cat
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.candidate.outputs.tag }}
+          SOURCE_DIGEST: ${{ inputs.target_sha }}
         shell: bash
-        run: |
-          set -e
+        run: scripts/workflows/release.sh verify-draft
 
-          is_draft=$(gh release view "$RELEASE_TAG" --json isDraft -q '.isDraft' || echo "false")
-          if [[ ${is_draft} != "true" ]]; then
-            echo "No draft release found"
-          else
-            gh release edit "$RELEASE_TAG" --draft=false
-          fi
+      - name: Publish release
+        if: steps.candidate.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.candidate.outputs.tag }}
+        shell: bash
+        run: gh release edit "${RELEASE_TAG:?}" --draft=false
