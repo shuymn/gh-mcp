@@ -133,7 +133,7 @@ readonly MERGE_SHA="1111111111111111111111111111111111111111"
 readonly TARGET_SHA="3333333333333333333333333333333333333333"
 export BASE_SHA HEAD_REF MERGE_SHA TARGET_SHA
 
-assert_contains() {
+assert_has_line() {
   local file=$1
   local expected=$2
 
@@ -190,7 +190,7 @@ test_rejects_changed_candidate() {
     fail "merge eligibility accepted generated changes"
   fi
 
-  assert_contains "$stderr" "Prepared candidate still has generated changes."
+  assert_has_line "$stderr" "Prepared candidate still has generated changes."
   echo "ok - merge eligibility rejects generated changes"
 }
 
@@ -211,7 +211,7 @@ test_inspect_rejects_identity_mismatch() {
     fail "merge inspection accepted an unexpected PR author"
   fi
 
-  assert_contains "$stderr" "PR #42 author is not renovate[bot]."
+  assert_has_line "$stderr" "PR #42 author is not renovate[bot]."
   echo "ok - merge inspection rejects identity mismatch"
 }
 
@@ -234,7 +234,7 @@ test_inspect_requires_exactly_one_pr() {
     fail "merge inspection accepted a workflow run without exactly one PR"
   fi
 
-  assert_contains "$stderr" "CI workflow run must reference exactly one PR."
+  assert_has_line "$stderr" "CI workflow run must reference exactly one PR."
   echo "ok - merge inspection requires exactly one PR"
 }
 
@@ -324,7 +324,7 @@ test_uses_exact_head_sha() {
     GITHUB_REPOSITORY=test/repository \
     "$MERGE_SCRIPT" merge 42 "$BASE_SHA" "$TARGET_SHA" >"$stdout"
 
-  assert_contains "$stdout" "Merged PR #42 as ${MERGE_SHA}."
+  assert_has_line "$stdout" "Merged PR #42 as ${MERGE_SHA}."
   echo "ok - merge uses the exact validated head SHA"
 }
 
@@ -338,7 +338,7 @@ test_skips_stale_base() {
     GITHUB_REPOSITORY=test/repository \
     "$MERGE_SCRIPT" merge 42 "$BASE_SHA" "$TARGET_SHA" >"$stdout"
 
-  assert_contains "$stdout" "PR #42 moved after canonical verification; skipping stale merge."
+  assert_has_line "$stdout" "PR #42 moved after canonical verification; skipping stale merge."
   echo "ok - merge skips a stale base"
 }
 
@@ -350,7 +350,7 @@ test_skips_major_update() {
   GITHUB_OUTPUT="$output" "$MERGE_SCRIPT" eligible false false >"$stdout"
 
   assert_exact_output "$output" "eligible=false"
-  assert_contains "$stdout" "Major upstream update requires manual merge."
+  assert_has_line "$stdout" "Major upstream update requires manual merge."
   echo "ok - merge eligibility skips major updates"
 }
 

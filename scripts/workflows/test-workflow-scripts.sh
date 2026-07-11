@@ -170,7 +170,7 @@ HIGHER_VERSION="$((current_major + 1)).0.0"
 readonly HIGHER_VERSION
 export HIGHER_VERSION
 
-assert_contains() {
+assert_has_line() {
   local file=$1
   local expected=$2
 
@@ -191,7 +191,7 @@ assert_exact_output() {
   diff -u "$expected" "$actual" || fail "unexpected workflow output"
 }
 
-assert_command_succeeded() {
+fail_command() {
   local stderr=$1
   local description=$2
 
@@ -214,7 +214,7 @@ test_prepare_rejects_failed_scope_inspection() {
     fail "prepare accepted a failed scope diff producer"
   fi
 
-  assert_contains "$stderr" "Failed to inspect upstream update."
+  assert_has_line "$stderr" "Failed to inspect upstream update."
   echo "ok - prepare rejects a failed scope diff producer"
 }
 
@@ -232,7 +232,7 @@ test_release_selects_missing_release() {
       GITHUB_REPOSITORY=test/repository \
       "$RELEASE_SCRIPT" select
   ) >"$stdout" 2>"$stderr"; then
-    assert_command_succeeded "$stderr" "selecting a missing release"
+    fail_command "$stderr" "selecting a missing release"
   fi
 
   assert_exact_output "$output" \
@@ -259,7 +259,7 @@ test_release_rejects_related_unpublished_tag() {
     fail "release select accepted a related unpublished tag at another commit"
   fi
 
-  assert_contains "$stderr" \
+  assert_has_line "$stderr" \
     "Unpublished tag v${current_version} targets ${RELATED_SHA}, not ${TARGET_SHA}; rerun the Release job for ${RELATED_SHA}."
   echo "ok - release select rejects a related unpublished tag"
 }
@@ -278,7 +278,7 @@ test_release_resumes_same_target_unpublished_tag() {
       GITHUB_REPOSITORY=test/repository \
       "$RELEASE_SCRIPT" select
   ) >"$stdout" 2>"$stderr"; then
-    assert_command_succeeded "$stderr" "resuming a same-target unpublished tag"
+    fail_command "$stderr" "resuming a same-target unpublished tag"
   fi
 
   assert_exact_output "$output" \
@@ -302,7 +302,7 @@ test_release_selects_higher_published_release() {
       GITHUB_REPOSITORY=test/repository \
       "$RELEASE_SCRIPT" select
   ) >"$stdout" 2>"$stderr"; then
-    assert_command_succeeded "$stderr" "selecting a higher published release"
+    fail_command "$stderr" "selecting a higher published release"
   fi
 
   assert_exact_output "$output" \
