@@ -33,15 +33,22 @@ assert_exact_assets() {
   local label=$1
   shift
   local -a actual_assets=("$@")
-  local index
+  local actual
+  local expected
+  local found
 
   if ((${#actual_assets[@]} != ${#EXPECTED_RELEASE_ASSETS[@]})); then
     die "${label} has an unexpected asset set."
   fi
-  for index in "${!EXPECTED_RELEASE_ASSETS[@]}"; do
-    if [[ "${actual_assets[$index]}" != "${EXPECTED_RELEASE_ASSETS[$index]}" ]]; then
-      die "${label} has an unexpected asset set."
-    fi
+  for expected in "${EXPECTED_RELEASE_ASSETS[@]}"; do
+    found=false
+    for actual in "${actual_assets[@]}"; do
+      if [[ "$actual" == "$expected" ]]; then
+        found=true
+        break
+      fi
+    done
+    [[ "$found" == true ]] || die "${label} has an unexpected asset set."
   done
 }
 

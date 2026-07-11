@@ -58,8 +58,12 @@ find_api_endpoint() {
   return 1
 }
 
-print_expected_release_assets() {
-  printf '%s\n' "${EXPECTED_RELEASE_ASSETS[@]}"
+print_reordered_release_assets() {
+  local index
+
+  for ((index = ${#EXPECTED_RELEASE_ASSETS[@]} - 1; index >= 0; index--)); do
+    printf '%s\n' "${EXPECTED_RELEASE_ASSETS[$index]}"
+  done
 }
 
 stub_gh() {
@@ -110,7 +114,7 @@ stub_gh() {
           ;;
         */releases/tags/*)
           printf 'true\n'
-          print_expected_release_assets
+          print_reordered_release_assets
           return 0
           ;;
       esac
@@ -306,7 +310,7 @@ test_release_selects_higher_published_release() {
     "publish=false" \
     "tag=v${HIGHER_VERSION}" \
     "tag_target=${TARGET_SHA}"
-  echo "ok - release select chooses a higher immutable published release"
+  echo "ok - release select accepts reordered assets for a higher immutable release"
 }
 
 test_prepare_rejects_failed_scope_inspection
