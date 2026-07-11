@@ -135,14 +135,13 @@ select_release() {
   require_env TARGET_SHA
 
   local version tag release_inventory highest_published highest_candidate
-  local superseded release_state tag_target create_tag
+  local release_state tag_target create_tag
 
   version="$(cat VERSION)"
   if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
     die "VERSION must be canonical major.minor.patch, got: $version"
   fi
   tag="v${version}"
-  superseded=false
 
   release_inventory="$(
     gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
@@ -159,7 +158,6 @@ select_release() {
     if [[ "$highest_candidate" != "$version" ]]; then
       echo "Release ${tag} is superseded by published v${highest_published}."
       tag="v${highest_published}"
-      superseded=true
     fi
   fi
 
@@ -172,7 +170,7 @@ select_release() {
     "" | draft | published) ;;
     *) die "Unexpected release state for ${tag}: ${release_state}" ;;
   esac
-  if [[ "$superseded" == true && "$release_state" != published ]]; then
+  if [[ "$tag" != "v${version}" && "$release_state" != published ]]; then
     die "Superseding release ${tag} is not published."
   fi
 
