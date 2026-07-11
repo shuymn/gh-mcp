@@ -53,7 +53,8 @@
       "matchUpdateTypes": ["minor", "patch"],
       "automerge": false,
       "minimumReleaseAge": "1 day",
-      "internalChecksFilter": "strict"
+      "internalChecksFilter": "strict",
+      "rebaseWhen": "behind-base-branch"
     },
     {
       "matchDatasources": ["github-releases"],

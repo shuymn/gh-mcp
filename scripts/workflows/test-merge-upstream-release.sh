@@ -86,10 +86,20 @@ stub_gh() {
       [[ "$endpoint" == */pulls/42 ]] || fail "unexpected endpoint: ${endpoint}"
       print_pr renovate[bot] closed "$TARGET_SHA" "$BASE_SHA" true
       ;;
+    head-behind)
+      case "$endpoint" in
+        */pulls/42) print_pr renovate[bot] ;;
+        */compare/${BASE_SHA}...${TARGET_SHA}) printf 'diverged\n' ;;
+        *) fail "unexpected behind-head endpoint: ${endpoint}" ;;
+      esac
+      ;;
     merge-success)
       case "${method}:${endpoint}" in
         GET:*/pulls/42)
           print_pr renovate[bot]
+          ;;
+        GET:*/compare/${BASE_SHA}...${TARGET_SHA})
+          printf 'ahead\n'
           ;;
         PUT:*/pulls/42/merge)
           [[ "$GH_TOKEN" == merge-token ]] || fail "merge request did not use the App token"
@@ -314,6 +324,27 @@ test_inspect_accepts_current_pr() {
   echo "ok - merge inspection accepts the exact current PR"
 }
 
+test_inspect_waits_for_rebase() {
+  local event="${TEST_ROOT}/behind-event"
+  local output="${TEST_ROOT}/behind-output"
+  local stdout="${TEST_ROOT}/behind-stdout"
+
+  create_workflow_run_event "$event"
+  : >"$output"
+  PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=head-behind \
+    GH_TOKEN=test-token \
+    GITHUB_EVENT_PATH="$event" \
+    GITHUB_OUTPUT="$output" \
+    GITHUB_REPOSITORY=test/repository \
+    "$MERGE_SCRIPT" inspect >"$stdout"
+
+  assert_exact_output "$output" "current=false"
+  assert_has_line "$stdout" \
+    "PR #42 does not include base ${BASE_SHA}; waiting for Renovate to rebase."
+  echo "ok - merge inspection waits for Renovate to rebase"
+}
+
 test_uses_exact_head_sha() {
   local stdout="${TEST_ROOT}/success-stdout"
 
@@ -371,6 +402,7 @@ test_inspect_skips_stale_head
 test_inspect_skips_closed_pr
 test_inspect_skips_closed_draft_pr
 test_inspect_accepts_current_pr
+test_inspect_waits_for_rebase
 test_uses_exact_head_sha
 test_skips_stale_base
 test_skips_major_update

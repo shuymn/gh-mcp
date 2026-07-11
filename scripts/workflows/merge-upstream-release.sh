@@ -87,7 +87,7 @@ inspect_workflow_run() {
   require_env GITHUB_OUTPUT
   require_env GITHUB_REPOSITORY
 
-  local pr_count event_row
+  local pr_count event_row comparison_status
   local workflow_name workflow_event workflow_conclusion run_head_ref run_head_sha
   local run_repo run_repo_id run_head_repo run_head_repo_id
   local event_pr_number event_base_ref event_base_sha event_base_repo_id
@@ -145,6 +145,21 @@ inspect_workflow_run() {
     write_current_output false
     return 0
   fi
+
+  comparison_status="$(
+    gh api \
+      "repos/${GITHUB_REPOSITORY}/compare/${LIVE_BASE_SHA}...${LIVE_HEAD_SHA}" \
+      --jq '.status'
+  )"
+  case "$comparison_status" in
+    ahead | identical) ;;
+    behind | diverged)
+      echo "PR #${LIVE_PR_NUMBER} does not include base ${LIVE_BASE_SHA}; waiting for Renovate to rebase."
+      write_current_output false
+      return 0
+      ;;
+    *) die "Unexpected comparison status for PR #${LIVE_PR_NUMBER}: ${comparison_status}." ;;
+  esac
 
   write_current_output true
 }
