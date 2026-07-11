@@ -138,22 +138,29 @@ func nextReleaseVersion(
 		return "", err
 	}
 
-	switch {
-	case next.major != current.major:
-		release.major, err = increment(release.major)
-		release.minor = 0
-		release.patch = 0
-	case next.minor != current.minor:
-		release.minor, err = increment(release.minor)
-		release.patch = 0
-	default:
-		release.patch, err = increment(release.patch)
-	}
+	release, err = bumpReleaseVersion(release, current, next)
 	if err != nil {
 		return "", fmt.Errorf("cannot bump release version %q: %w", currentRelease, err)
 	}
 
 	return release.String(), nil
+}
+
+func bumpReleaseVersion(release, currentUpstream, nextUpstream version) (version, error) {
+	var err error
+
+	switch {
+	case nextUpstream.major != currentUpstream.major:
+		release.major, err = increment(release.major)
+		release.minor = 0
+		release.patch = 0
+	case nextUpstream.minor != currentUpstream.minor:
+		release.minor, err = increment(release.minor)
+		release.patch = 0
+	default:
+		release.patch, err = increment(release.patch)
+	}
+	return release, err
 }
 
 func validateReleaseTransition(
@@ -200,16 +207,17 @@ func validateReleaseTransition(
 		return nil
 	}
 
-	expected, err := nextReleaseVersion(currentRelease, currentUpstream, nextUpstream)
+	expected, err := bumpReleaseVersion(current, currentMCP, nextMCP)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot bump release version %q: %w", currentRelease, err)
 	}
-	if nextRelease != expected {
+	expectedRelease := expected.String()
+	if nextRelease != expectedRelease {
 		return fmt.Errorf(
 			"%w: got %q, expected %q",
 			errUnexpectedRelease,
 			nextRelease,
-			expected,
+			expectedRelease,
 		)
 	}
 
