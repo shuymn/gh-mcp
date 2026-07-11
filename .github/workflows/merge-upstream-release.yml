@@ -1,0 +1,112 @@
+name: Merge prepared upstream release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: merge-upstream-release-${{ github.repository }}
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  merge:
+    if: >-
+      github.repository == 'shuymn/gh-mcp' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      startsWith(github.event.workflow_run.head_branch,
+      'renovate/github-github-mcp-server-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout trusted workflow tools
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Inspect successful CI run
+        id: inspect
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: workflow/scripts/workflows/merge-upstream-release.sh inspect
+
+      - name: Checkout exact current base
+        if: steps.inspect.outputs.current == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ steps.inspect.outputs.base_sha }}
+          path: trusted
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout exact tested head
+        if: steps.inspect.outputs.current == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ steps.inspect.outputs.head_sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        if: steps.inspect.outputs.current == 'true'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: trusted/go.mod
+          cache-dependency-path: trusted/go.sum
+          cache: true
+
+      - name: Verify canonical release metadata
+        if: steps.inspect.outputs.current == 'true'
+        id: prepare
+        env:
+          BASE_SHA: ${{ steps.inspect.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.inspect.outputs.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+        working-directory: candidate
+        run: >-
+          ../trusted/scripts/workflows/prepare-upstream-release.sh
+          prepare "$BASE_SHA" "$HEAD_SHA"
+
+      - name: Check trusted merge eligibility
+        if: steps.inspect.outputs.current == 'true'
+        id: eligibility
+        env:
+          GENERATED_CHANGES: ${{ steps.prepare.outputs.changed }}
+          AUTO_MERGE: ${{ steps.prepare.outputs.auto_merge }}
+        run: >-
+          trusted/scripts/workflows/merge-upstream-release.sh
+          eligible "$GENERATED_CHANGES" "$AUTO_MERGE"
+
+      - name: Create repository-scoped app token
+        if: steps.eligibility.outputs.eligible == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      - name: Merge exact prepared head
+        if: steps.eligibility.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ steps.inspect.outputs.pr_number }}
+          BASE_SHA: ${{ steps.inspect.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.inspect.outputs.head_sha }}
+        run: >-
+          trusted/scripts/workflows/merge-upstream-release.sh
+          merge "$PR_NUMBER" "$BASE_SHA" "$HEAD_SHA"

@@ -9,17 +9,20 @@ import (
 )
 
 const (
-	minimumArgumentCount  = 2
-	nextArgumentCount     = 5
-	validateArgumentCount = 6
-	versionComponentCount = 3
-	nextCommand           = "next"
-	validateCommand       = "validate"
+	minimumArgumentCount   = 2
+	autoMergeArgumentCount = 4
+	nextArgumentCount      = 5
+	validateArgumentCount  = 6
+	versionComponentCount  = 3
+	autoMergeCommand       = "auto-merge"
+	nextCommand            = "next"
+	validateCommand        = "validate"
 )
 
 var (
 	errUsage = errors.New(
 		"usage: release-version next <current-release> <current-upstream> <next-upstream> | " +
+			"release-version auto-merge <current-upstream> <next-upstream> | " +
 			"release-version validate <current-release> <next-release> " +
 			"<current-upstream> <next-upstream>",
 	)
@@ -53,6 +56,16 @@ func run(args []string) error {
 	}
 
 	switch args[1] {
+	case autoMergeCommand:
+		if len(args) != autoMergeArgumentCount {
+			return errUsage
+		}
+		autoMerge, err := autoMergeUpstreamUpdate(args[2], args[3])
+		if err != nil {
+			return err
+		}
+		fmt.Println(autoMerge)
+		return nil
 	case nextCommand:
 		if len(args) != nextArgumentCount {
 			return errUsage
@@ -73,6 +86,44 @@ func run(args []string) error {
 	}
 }
 
+func autoMergeUpstreamUpdate(currentUpstream string, nextUpstream string) (bool, error) {
+	current, next, err := parseUpstreamUpdate(currentUpstream, nextUpstream)
+	if err != nil {
+		return false, err
+	}
+
+	return next.major == current.major, nil
+}
+
+func parseUpstreamUpdate(currentUpstream string, nextUpstream string) (version, version, error) {
+	current, err := parseVersion(currentUpstream, true)
+	if err != nil {
+		return version{}, version{}, fmt.Errorf(
+			"invalid current upstream version %q: %w",
+			currentUpstream,
+			err,
+		)
+	}
+	next, err := parseVersion(nextUpstream, true)
+	if err != nil {
+		return version{}, version{}, fmt.Errorf(
+			"invalid next upstream version %q: %w",
+			nextUpstream,
+			err,
+		)
+	}
+	if compareVersions(next, current) <= 0 {
+		return version{}, version{}, fmt.Errorf(
+			"%w: %q is not newer than %q",
+			errUpstreamNotNewer,
+			nextUpstream,
+			currentUpstream,
+		)
+	}
+
+	return current, next, nil
+}
+
 func nextReleaseVersion(
 	currentRelease string,
 	currentUpstream string,
@@ -82,21 +133,9 @@ func nextReleaseVersion(
 	if err != nil {
 		return "", fmt.Errorf("invalid current release version %q: %w", currentRelease, err)
 	}
-	current, err := parseVersion(currentUpstream, true)
+	current, next, err := parseUpstreamUpdate(currentUpstream, nextUpstream)
 	if err != nil {
-		return "", fmt.Errorf("invalid current upstream version %q: %w", currentUpstream, err)
-	}
-	next, err := parseVersion(nextUpstream, true)
-	if err != nil {
-		return "", fmt.Errorf("invalid next upstream version %q: %w", nextUpstream, err)
-	}
-	if compareVersions(next, current) <= 0 {
-		return "", fmt.Errorf(
-			"%w: %q is not newer than %q",
-			errUpstreamNotNewer,
-			nextUpstream,
-			currentUpstream,
-		)
+		return "", err
 	}
 
 	switch {

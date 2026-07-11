@@ -123,6 +123,50 @@ func TestNextReleaseVersionRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+func TestAutoMergeUpstreamUpdate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		currentUpstream string
+		nextUpstream    string
+		want            bool
+	}{
+		{
+			name:            "patch",
+			currentUpstream: "v1.5.0",
+			nextUpstream:    "v1.5.1",
+			want:            true,
+		},
+		{
+			name:            "minor",
+			currentUpstream: "v1.5.9",
+			nextUpstream:    "v1.6.0",
+			want:            true,
+		},
+		{
+			name:            "major",
+			currentUpstream: "v1.9.9",
+			nextUpstream:    "v2.0.0",
+			want:            false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := autoMergeUpstreamUpdate(test.currentUpstream, test.nextUpstream)
+			if err != nil {
+				t.Fatalf("autoMergeUpstreamUpdate returned error: %v", err)
+			}
+			if got != test.want {
+				t.Fatalf("autoMergeUpstreamUpdate = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
 func TestValidateReleaseTransition(t *testing.T) {
 	t.Parallel()
 

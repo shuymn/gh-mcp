@@ -8,6 +8,8 @@ Thank you for your interest in contributing to gh-mcp!
 
 - Go 1.21 or later
 - GitHub CLI (`gh`)
+- Bash 4.1 or later (`brew install bash` on macOS)
+- ShellCheck
 - Task (optional, for using Taskfile commands)
 
 ### Building from Source
@@ -67,14 +69,20 @@ go test -race ./...
 # Run linter
 task lint
 
-# Format code
+# Check shell scripts with shellcheck and shfmt
+task shell:check
+
+# Run release workflow script regression tests
+task shell:test
+
+# Format Go and shell code
 task fmt
 ```
 
 ### Checking Everything
 
 ```bash
-# Run all checks (test, lint, build)
+# Run all checks (shell, test, lint, build)
 task check
 ```
 
@@ -91,8 +99,12 @@ gh-mcp/
 ├── main_test.go      # Unit tests for main orchestration
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml     # CI pipeline
-│       └── release.yml # Release automation
+│       ├── bump.yml                   # Upstream release preparation
+│       ├── ci.yml                     # CI pipeline
+│       ├── merge-upstream-release.yml # Trusted post-CI merge
+│       └── release.yml                # Release publishing
+├── scripts/
+│   └── workflows/     # Statically checked release workflow logic
 ├── .golangci.yaml    # Linter configuration
 ├── .octocov.yml      # Coverage reporting
 ├── Taskfile.yml      # Build automation
@@ -138,14 +150,17 @@ Stable `github-mcp-server` updates are released through an automated pipeline:
    `mcp_version.go`.
 2. `Prepare upstream release` verifies the upstream attestations and checksums, updates
    `VERSION` and the pinned archive hashes in one commit, and pushes it to the PR.
-3. Patch and minor updates merge automatically after the required CI checks pass. Major
-   updates remain open for compatibility review.
+3. After required CI passes, the trusted post-CI workflow checks the current PR identity,
+   exact base/head, and canonical metadata again before merging patch and minor updates.
+   Major updates remain open for compatibility review.
 4. After the merge commit passes CI on `main`, `Release` creates the version tag, builds
    all extension artifacts, generates build-provenance attestations, and publishes the
    GitHub release.
 
 Release jobs are serialized. If CI completion order is inverted, an older candidate
 verifies the newer immutable release and exits instead of publishing versions backward.
+Workflow YAML delegates non-trivial shell logic to `scripts/workflows/`; `task check`
+validates those scripts with shellcheck and shfmt.
 
 For a project-only release, bump `VERSION` in a normal PR. The same CI-gated release path
 runs after merge. If the `Release` job fails, rerun that failed CI job; it resumes an

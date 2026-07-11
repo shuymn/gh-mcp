@@ -6,6 +6,7 @@ vars:
   COVERAGE_FILE: coverage.out
   BIN_DIR: bin
   GOLANGCI_LINT_VERSION: v2.12.2
+  SHFMT_VERSION: v3.13.1
 
 tasks:
   default:
@@ -92,6 +93,47 @@ tasks:
     cmds:
       - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b {{.BIN_DIR}} {{.GOLANGCI_LINT_VERSION}}
 
+  install:shfmt:
+    desc: Install shfmt
+    vars:
+      CURRENT_VERSION:
+        sh: '{{.BIN_DIR}}/shfmt --version 2>/dev/null | sed -nE "1s/^v?//p" || true'
+    status:
+      - test -f {{.BIN_DIR}}/shfmt
+      - test "v{{.CURRENT_VERSION}}" = "{{.SHFMT_VERSION}}"
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - GOBIN="{{.TASKFILE_DIR}}/{{.BIN_DIR}}" go install mvdan.cc/sh/v3/cmd/shfmt@{{.SHFMT_VERSION}}
+
+  shell:check:
+    desc: Run shellcheck and verify shell formatting
+    deps:
+      - task: install:shfmt
+        silent: true
+    preconditions:
+      - sh: command -v shellcheck
+        msg: "shellcheck is not installed. Please install it first."
+    cmds:
+      - git ls-files -z --cached --others --exclude-standard -- '*.sh' | xargs -0 shellcheck --
+      - git ls-files -z --cached --others --exclude-standard -- '*.sh' | xargs -0 {{.BIN_DIR}}/shfmt -d -i 2 -ci --
+
+  shell:fmt:
+    desc: Format shell scripts
+    deps:
+      - task: install:shfmt
+        silent: true
+    cmds:
+      - git ls-files -z --cached --others --exclude-standard -- '*.sh' | xargs -0 {{.BIN_DIR}}/shfmt -w -i 2 -ci --
+
+  shell:test:
+    desc: Run workflow shell script regression tests
+    preconditions:
+      - sh: 'bash -c ''(( BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 1) ))'''
+        msg: "Bash 4.1 or later must be first on PATH."
+    cmds:
+      - ./scripts/workflows/test-merge-upstream-release.sh
+      - ./scripts/workflows/test-workflow-scripts.sh
+
   lint:
     desc: Run golangci-lint
     deps:
@@ -104,18 +146,23 @@ tasks:
       - "{{.BIN_DIR}}/golangci-lint run"
 
   fmt:
-    desc: Format code using golangci-lint
+    desc: Format Go and shell code
     deps:
       - task: install:golangci-lint
+        silent: true
+      - task: install:shfmt
         silent: true
     cmds:
       - cmd: "{{.BIN_DIR}}/golangci-lint version"
         silent: true
       - "{{.BIN_DIR}}/golangci-lint fmt"
+      - task: shell:fmt
 
   check:
-    desc: Run all checks (test, lint, build)
+    desc: Run all checks (shell, test, lint, build)
     cmds:
+      - task: shell:check
+      - task: shell:test
       - task: lint
       - task: build
       - task: test

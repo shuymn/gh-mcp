@@ -11,21 +11,6 @@ on:
 permissions:
   contents: read
 
-env:
-  EXPECTED_RELEASE_ASSETS: |-
-    darwin-amd64
-    darwin-arm64
-    freebsd-386
-    freebsd-amd64
-    freebsd-arm64
-    linux-386
-    linux-amd64
-    linux-arm
-    linux-arm64
-    windows-386.exe
-    windows-amd64.exe
-    windows-arm64.exe
-
 concurrency:
   group: release-${{ github.repository }}
   cancel-in-progress: false
@@ -58,135 +43,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TARGET_SHA: ${{ inputs.target_sha }}
         shell: bash
-        run: |
-          set -euo pipefail
-
-          version="$(cat VERSION)"
-          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "VERSION must be canonical major.minor.patch, got: $version" >&2
-            exit 1
-          fi
-          tag="v${version}"
-          superseded=false
-
-          release_inventory="$(
-            gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
-              --jq '.[] | [.tag_name, .draft] | @tsv'
-          )"
-          highest_published="$(
-            awk -F '\t' '$2 == "false" { print $1 }' <<< "$release_inventory" |
-              sed -nE 's/^v((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))$/\1/p' |
-              sort -V |
-              tail -n 1
-          )"
-          if [[ -n "$highest_published" ]]; then
-            highest_candidate="$(
-              printf '%s\n' "$version" "$highest_published" | sort -V | tail -n 1
-            )"
-            if [[ "$highest_candidate" != "$version" ]]; then
-              echo "Release ${tag} is superseded by published v${highest_published}."
-              tag="v${highest_published}"
-              superseded=true
-            fi
-          fi
-
-          release_state="$(
-            awk -F '\t' -v tag="$tag" \
-              '$1 == tag { print ($2 == "true" ? "draft" : "published") }' \
-              <<< "$release_inventory"
-          )"
-          case "$release_state" in
-            "" | draft | published)
-              ;;
-            *)
-              echo "Unexpected release state for ${tag}: ${release_state}" >&2
-              exit 1
-              ;;
-          esac
-          if [[ "$superseded" == true && "$release_state" != published ]]; then
-            echo "Superseding release ${tag} is not published." >&2
-            exit 1
-          fi
-
-          tag_ref="$(
-            gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/tags/${tag}" \
-              --jq ".[] | select(.ref == \"refs/tags/${tag}\") | [.object.type, .object.sha] | @tsv"
-          )"
-          tag_target=""
-          if [[ -n "$tag_ref" ]]; then
-            IFS=$'\t' read -r tag_type tag_object <<< "$tag_ref"
-            case "$tag_type" in
-              commit)
-                tag_target="$tag_object"
-                ;;
-              tag)
-                tag_target="$(
-                  gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object}" --jq '.object.sha'
-                )"
-                ;;
-              *)
-                echo "Unsupported tag object type for ${tag}: ${tag_type}" >&2
-                exit 1
-                ;;
-            esac
-          fi
-
-          if [[ "$release_state" == "published" ]]; then
-            if [[ -z "$tag_target" ]]; then
-              echo "Published release ${tag} has no matching tag." >&2
-              exit 1
-            fi
-            if ! git merge-base --is-ancestor "$tag_target" "$TARGET_SHA" &&
-              ! git merge-base --is-ancestor "$TARGET_SHA" "$tag_target"; then
-              echo "Published tag ${tag} and ${TARGET_SHA} are unrelated." >&2
-              exit 1
-            fi
-            mapfile -t release_details < <(
-              gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" \
-                --jq '.immutable, ([.assets[].name] | sort | .[])'
-            )
-            if [[ "${release_details[0]:-}" != true ]]; then
-              echo "Published release ${tag} is not immutable." >&2
-              exit 1
-            fi
-            release_assets="$(printf '%s\n' "${release_details[@]:1}")"
-            if [[ "$release_assets" != "$EXPECTED_RELEASE_ASSETS" ]]; then
-              echo "Published release ${tag} has an unexpected asset set." >&2
-              exit 1
-            fi
-
-            echo "Release ${tag} is already published with the expected metadata."
-            {
-              echo "published=true"
-              echo "publish=false"
-              echo "tag=${tag}"
-              echo "tag_target=${tag_target}"
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [[ -n "$tag_target" && "$tag_target" != "$TARGET_SHA" ]]; then
-            if git merge-base --is-ancestor "$TARGET_SHA" "$tag_target"; then
-              echo "Unpublished tag ${tag} belongs to a newer commit; skipping ${TARGET_SHA}."
-              {
-                echo "publish=false"
-              } >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            echo "Unpublished tag ${tag} points to ${tag_target}, expected ${TARGET_SHA}." >&2
-            exit 1
-          fi
-
-          if [[ -z "$tag_target" ]]; then
-            create_tag=true
-          else
-            create_tag=false
-          fi
-          {
-            echo "create_tag=${create_tag}"
-            echo "publish=true"
-            echo "tag=${tag}"
-          } >> "$GITHUB_OUTPUT"
+        run: scripts/workflows/release.sh select
 
       - name: Restore published provenance verification
         if: steps.candidate.outputs.published == 'true'
@@ -196,7 +53,9 @@ jobs:
           path: .release-provenance
           key: >-
             release-provenance-${{ steps.candidate.outputs.tag }}-${{
-            steps.candidate.outputs.tag_target }}
+            steps.candidate.outputs.tag_target }}-${{
+            hashFiles('scripts/workflows/release.sh',
+            '.github/workflows/release.yml') }}
 
       - name: Verify published release provenance
         if: >-
@@ -207,25 +66,7 @@ jobs:
           RELEASE_TAG: ${{ steps.candidate.outputs.tag }}
           SOURCE_DIGEST: ${{ steps.candidate.outputs.tag_target }}
         shell: bash
-        run: |
-          set -euo pipefail
-
-          assets_dir="${RUNNER_TEMP}/release-assets"
-          mkdir -p "$assets_dir" .release-provenance
-          gh release verify "${RELEASE_TAG:?}" \
-            --repo "$GITHUB_REPOSITORY" >/dev/null
-          gh release download "$RELEASE_TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --pattern '*' \
-            --dir "$assets_dir"
-          for asset in "$assets_dir"/*; do
-            gh attestation verify "$asset" \
-              --repo "$GITHUB_REPOSITORY" \
-              --signer-workflow shuymn/gh-mcp/.github/workflows/release.yml \
-              --source-digest "${SOURCE_DIGEST:?}" \
-              --deny-self-hosted-runners >/dev/null
-          done
-          touch ".release-provenance/${RELEASE_TAG}-${SOURCE_DIGEST}"
+        run: scripts/workflows/release.sh verify-published
 
       - name: Set up Go
         if: steps.candidate.outputs.publish == 'true'
@@ -265,11 +106,7 @@ jobs:
           RELEASE_TAG: ${{ steps.candidate.outputs.tag }}
           TARGET_SHA: ${{ inputs.target_sha }}
         shell: bash
-        run: |
-          set -euo pipefail
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
-            -f ref="refs/tags/${RELEASE_TAG:?}" \
-            -f sha="${TARGET_SHA:?}" >/dev/null
+        run: scripts/workflows/release.sh create-tag
 
       - name: Build draft release
         if: steps.candidate.outputs.publish == 'true'
@@ -287,36 +124,7 @@ jobs:
           RELEASE_TAG: ${{ steps.candidate.outputs.tag }}
           SOURCE_DIGEST: ${{ inputs.target_sha }}
         shell: bash
-        run: |
-          set -euo pipefail
-
-          mapfile -t release_details < <(
-            gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG:?}" \
-              --jq '.draft, ([.assets[].name] | sort | .[])'
-          )
-          if [[ "${release_details[0]:-}" != true ]]; then
-            echo "Release ${RELEASE_TAG} is not a draft." >&2
-            exit 1
-          fi
-          release_assets="$(printf '%s\n' "${release_details[@]:1}")"
-          if [[ "$release_assets" != "$EXPECTED_RELEASE_ASSETS" ]]; then
-            echo "Draft release ${RELEASE_TAG} has an unexpected asset set." >&2
-            exit 1
-          fi
-
-          assets_dir="${RUNNER_TEMP}/draft-release-assets"
-          mkdir -p "$assets_dir"
-          gh release download "$RELEASE_TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --pattern '*' \
-            --dir "$assets_dir"
-          for asset in "$assets_dir"/*; do
-            gh attestation verify "$asset" \
-              --repo "$GITHUB_REPOSITORY" \
-              --signer-workflow shuymn/gh-mcp/.github/workflows/release.yml \
-              --source-digest "${SOURCE_DIGEST:?}" \
-              --deny-self-hosted-runners >/dev/null
-          done
+        run: scripts/workflows/release.sh verify-draft
 
       - name: Publish release
         if: steps.candidate.outputs.publish == 'true'

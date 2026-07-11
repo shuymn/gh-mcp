@@ -1,6 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:best-practices", ":timezone(Asia/Tokyo)"],
+  "gitIgnoredAuthors": [
+    "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+  ],
   "labels": ["dependencies"],
   "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
   "prHourlyLimit": 0,
@@ -26,10 +29,20 @@
       ],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "golangci/golangci-lint"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^Taskfile\\.yml$/"],
+      "matchStrings": [
+        "SHFMT_VERSION: (?<currentValue>v?\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "mvdan/sh"
     }
   ],
   "packageRules": [
     {
+      "matchPackageNames": ["!github/github-mcp-server"],
       "matchUpdateTypes": ["minor", "patch"],
       "matchCurrentVersion": ">=1.0.0",
       "automerge": true
@@ -38,7 +51,7 @@
       "matchDatasources": ["github-releases"],
       "matchPackageNames": ["github/github-mcp-server"],
       "matchUpdateTypes": ["minor", "patch"],
-      "automerge": true,
+      "automerge": false,
       "minimumReleaseAge": "1 day",
       "internalChecksFilter": "strict"
     },

@@ -84,8 +84,9 @@ The project consists of three main components:
    - Renovate detects stable `github-mcp-server` releases
    - `.github/workflows/bump.yml` verifies upstream provenance and prepares `VERSION` plus
      pinned archive hashes in the Renovate PR
-   - Patch and minor upstream updates auto-merge after required CI; major updates require
-     compatibility review
+   - After required PR CI, `.github/workflows/merge-upstream-release.yml` revalidates the
+     exact live base/head and canonical metadata before merging patch/minor updates with a
+     repository-scoped App token; major updates require compatibility review
    - CI calls `.github/workflows/release.yml` only after a successful `main` build; the
      reusable workflow creates an idempotent version tag and draft release, builds with
      `cli/gh-extension-precompile@v2`, generates attestations, and publishes the release
@@ -109,7 +110,8 @@ When extending this CLI:
 ## Release Process
 
 Normal upstream releases require no manual tag or release PR. Renovate opens the update PR,
-the prepare workflow updates release metadata, and successful `main` CI triggers the release.
+the prepare workflow updates release metadata, the trusted post-CI workflow merges validated
+patch/minor updates, and successful `main` CI triggers the release.
 
 For a project-only release, update `VERSION` in a normal PR. Recover a failed release by
 rerunning the failed `Release` job in the same CI run so the tested commit remains fixed.

@@ -23,140 +23,42 @@ jobs:
     timeout-minutes: 20
 
     steps:
+      - name: Checkout trusted base
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Checkout exact Renovate head
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
           fetch-depth: 0
           persist-credentials: false
-
-      - name: Validate trusted update scope
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if ! git merge-base --is-ancestor "$BASE_SHA" HEAD; then
-            echo "Renovate must rebase this update onto ${BASE_SHA}." >&2
-            exit 1
-          fi
-
-          saw_version=false
-          while IFS= read -r -d '' file; do
-            case "$file" in
-              mcp_version.go)
-                saw_version=true
-                ;;
-              VERSION)
-                ;;
-              bundle_darwin_amd64.go|bundle_darwin_arm64.go|bundle_linux_386.go|bundle_linux_amd64.go|bundle_linux_arm64.go|bundle_windows_386.go|bundle_windows_amd64.go|bundle_windows_arm64.go)
-                ;;
-              *)
-                echo "Unexpected file in upstream update: $file" >&2
-                exit 1
-                ;;
-            esac
-          done < <(git diff --name-only -z "${BASE_SHA}..HEAD")
-
-          if [[ "$saw_version" != true ]]; then
-            echo "mcp_version.go is not part of the upstream update" >&2
-            exit 1
-          fi
 
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version-file: go.mod
+          go-version-file: trusted/go.mod
+          cache-dependency-path: trusted/go.sum
           cache: true
 
-      - name: Determine release version
-        id: version
+      - name: Prepare release metadata
+        id: prepare
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          current_release="$(git show "${BASE_SHA:?}:VERSION")"
-          current_upstream="$(
-            git show "${BASE_SHA}:mcp_version.go" |
-              sed -nE 's/^const mcpServerVersion = "(v[^"]+)"$/\1/p'
-          )"
-          next_upstream="$(
-            sed -nE 's/^const mcpServerVersion = "(v[^"]+)"$/\1/p' mcp_version.go
-          )"
-
-          next_release="$(
-            go run ./scripts/release-version next \
-              "$current_release" \
-              "$current_upstream" \
-              "$next_upstream"
-          )"
-
-          echo "release=${next_release}" >> "$GITHUB_OUTPUT"
-          echo "upstream=${next_upstream}" >> "$GITHUB_OUTPUT"
-
-      - name: Refresh release metadata
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ steps.version.outputs.release }}
-          UPSTREAM_VERSION: ${{ steps.version.outputs.upstream }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          git restore --source="${BASE_SHA:?}" -- \
-            VERSION \
-            mcp_version.go \
-            bundle_darwin_amd64.go \
-            bundle_darwin_arm64.go \
-            bundle_linux_386.go \
-            bundle_linux_amd64.go \
-            bundle_linux_arm64.go \
-            bundle_windows_386.go \
-            bundle_windows_amd64.go \
-            bundle_windows_arm64.go
-
-          ./scripts/update-bundled-mcp-server.sh "${UPSTREAM_VERSION:?}"
-          echo "${RELEASE_VERSION:?}" > VERSION
-
-      - name: Validate generated changes
-        id: changes
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mapfile -d '' -t changed_files < <(
-            {
-              git diff --name-only -z
-              git ls-files --others --exclude-standard -z
-            } | sort -zu
-          )
-
-          if (( ${#changed_files[@]} == 0 )); then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          for file in "${changed_files[@]}"; do
-            case "$file" in
-              VERSION | mcp_version.go)
-                ;;
-              bundle_darwin_amd64.go|bundle_darwin_arm64.go|bundle_linux_386.go|bundle_linux_amd64.go|bundle_linux_arm64.go|bundle_windows_386.go|bundle_windows_amd64.go|bundle_windows_arm64.go)
-                ;;
-              *)
-                echo "Unexpected generated change: $file" >&2
-                exit 1
-                ;;
-            esac
-          done
-
-          echo "changed=true" >> "$GITHUB_OUTPUT"
+        working-directory: candidate
+        run: >-
+          ../trusted/scripts/workflows/prepare-upstream-release.sh
+          prepare "$BASE_SHA" "$HEAD_SHA"
 
       - name: Create repository-scoped app token
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.prepare.outputs.changed == 'true'
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -167,19 +69,12 @@ jobs:
           permission-contents: write
 
       - name: Commit generated release metadata
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.prepare.outputs.changed == 'true'
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
-          RELEASE_VERSION: ${{ steps.version.outputs.release }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add VERSION mcp_version.go bundle_*.go
-          git commit -m "chore: prepare release ${RELEASE_VERSION:?}"
-          git push \
-            "https://x-access-token:${PUSH_TOKEN:?}@github.com/${GITHUB_REPOSITORY}.git" \
-            "HEAD:${HEAD_REF:?}"
+          RELEASE_VERSION: ${{ steps.prepare.outputs.release }}
+        working-directory: candidate
+        run: >-
+          ../trusted/scripts/workflows/prepare-upstream-release.sh
+          commit "$RELEASE_VERSION" "$HEAD_REF"

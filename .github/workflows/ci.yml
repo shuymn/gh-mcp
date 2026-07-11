@@ -35,25 +35,7 @@ jobs:
           BASE_SHA: >-
             ${{ github.event_name == 'pull_request' &&
             github.event.pull_request.base.sha || github.event.before }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          current_upstream="$(
-            git show "${BASE_SHA:?}:mcp_version.go" |
-              sed -nE 's/^const mcpServerVersion = "(v[^"]+)"$/\1/p'
-          )"
-          next_upstream="$(
-            sed -nE 's/^const mcpServerVersion = "(v[^"]+)"$/\1/p' mcp_version.go
-          )"
-          current_release="$(git show "${BASE_SHA}:VERSION")"
-          next_release="$(cat VERSION)"
-
-          go run ./scripts/release-version validate \
-            "$current_release" \
-            "$next_release" \
-            "$current_upstream" \
-            "$next_upstream"
+        run: ./scripts/workflows/validate-release-transition.sh
 
       - name: Restore bundled assets cache
         id: bundled-cache
@@ -75,6 +57,15 @@ jobs:
       - name: Set golangci-lint version
         id: set-golangci-lint-version
         run: echo "version=$(yq '.vars.GOLANGCI_LINT_VERSION' Taskfile.yml)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Task
+        uses: go-task/setup-task@01a4adf9db2d14c1de7a560f09170b6e0df736aa # v2.1.0
+
+      - name: Check shell scripts
+        run: task shell:check
+
+      - name: Test workflow scripts
+        run: task shell:test
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9.2.1
