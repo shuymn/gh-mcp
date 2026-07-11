@@ -8,7 +8,7 @@ Thank you for your interest in contributing to gh-mcp!
 
 - Go 1.21 or later
 - GitHub CLI (`gh`)
-- Bash 4.1 or later (`brew install bash` on macOS)
+- Bash 4.1 or later (macOS: run `brew install bash`, then prepend `$(brew --prefix)/bin` to `PATH` in your shell startup file)
 - ShellCheck
 - Task (optional, for using Taskfile commands)
 
