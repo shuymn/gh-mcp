@@ -202,7 +202,6 @@ fail_command() {
 
 test_prepare_rejects_failed_scope_inspection() {
   local output="${TEST_ROOT}/prepare-output"
-  local stdout="${TEST_ROOT}/prepare-stdout"
   local stderr="${TEST_ROOT}/prepare-stderr"
 
   : >"$output"
@@ -210,7 +209,7 @@ test_prepare_rejects_failed_scope_inspection() {
     GIT_STUB_SCENARIO=scope-diff-failure \
     GITHUB_OUTPUT="$output" \
     "$PREPARE_SCRIPT" prepare "$TARGET_SHA" "$TARGET_SHA" \
-    >"$stdout" 2>"$stderr"; then
+    >/dev/null 2>"$stderr"; then
     fail "prepare accepted a failed scope diff producer"
   fi
 
@@ -220,7 +219,6 @@ test_prepare_rejects_failed_scope_inspection() {
 
 test_release_selects_missing_release() {
   local output="${TEST_ROOT}/missing-release-output"
-  local stdout="${TEST_ROOT}/missing-release-stdout"
   local stderr="${TEST_ROOT}/missing-release-stderr"
 
   : >"$output"
@@ -231,7 +229,7 @@ test_release_selects_missing_release() {
       GITHUB_OUTPUT="$output" \
       GITHUB_REPOSITORY=test/repository \
       "$RELEASE_SCRIPT" select
-  ) >"$stdout" 2>"$stderr"; then
+  ) >/dev/null 2>"$stderr"; then
     fail_command "$stderr" "selecting a missing release"
   fi
 
@@ -244,7 +242,6 @@ test_release_selects_missing_release() {
 
 test_release_rejects_related_unpublished_tag() {
   local output="${TEST_ROOT}/unpublished-tag-output"
-  local stdout="${TEST_ROOT}/unpublished-tag-stdout"
   local stderr="${TEST_ROOT}/unpublished-tag-stderr"
 
   : >"$output"
@@ -255,7 +252,7 @@ test_release_rejects_related_unpublished_tag() {
       GITHUB_OUTPUT="$output" \
       GITHUB_REPOSITORY=test/repository \
       "$RELEASE_SCRIPT" select
-  ) >"$stdout" 2>"$stderr"; then
+  ) >/dev/null 2>"$stderr"; then
     fail "release select accepted a related unpublished tag at another commit"
   fi
 
@@ -266,7 +263,6 @@ test_release_rejects_related_unpublished_tag() {
 
 test_release_resumes_same_target_unpublished_tag() {
   local output="${TEST_ROOT}/same-target-tag-output"
-  local stdout="${TEST_ROOT}/same-target-tag-stdout"
   local stderr="${TEST_ROOT}/same-target-tag-stderr"
 
   : >"$output"
@@ -277,7 +273,7 @@ test_release_resumes_same_target_unpublished_tag() {
       GITHUB_OUTPUT="$output" \
       GITHUB_REPOSITORY=test/repository \
       "$RELEASE_SCRIPT" select
-  ) >"$stdout" 2>"$stderr"; then
+  ) >/dev/null 2>"$stderr"; then
     fail_command "$stderr" "resuming a same-target unpublished tag"
   fi
 
@@ -290,7 +286,6 @@ test_release_resumes_same_target_unpublished_tag() {
 
 test_release_selects_higher_published_release() {
   local output="${TEST_ROOT}/published-release-output"
-  local stdout="${TEST_ROOT}/published-release-stdout"
   local stderr="${TEST_ROOT}/published-release-stderr"
 
   : >"$output"
@@ -301,7 +296,7 @@ test_release_selects_higher_published_release() {
       GITHUB_OUTPUT="$output" \
       GITHUB_REPOSITORY=test/repository \
       "$RELEASE_SCRIPT" select
-  ) >"$stdout" 2>"$stderr"; then
+  ) >/dev/null 2>"$stderr"; then
     fail_command "$stderr" "selecting a higher published release"
   fi
 
