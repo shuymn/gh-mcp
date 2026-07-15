@@ -1,0 +1,122 @@
+apiVersion: gh-infra/v1
+kind: Repository
+metadata:
+  name: gh-mcp
+  owner: shuymn
+reconcile:
+  labels: authoritative
+  rulesets: authoritative
+spec:
+  description: A GitHub CLI extension that seamlessly runs the github-mcp-server using your existing gh authentication. Eliminates manual PAT setup by automatically retrieving GitHub credentials and launching the MCP server with proper authentication.
+  visibility: public
+  archived: false
+  topics:
+    - ai-tools
+    - authentication
+    - claude
+    - cli-tool
+    - developer-tools
+    - gh-extension
+    - github-api
+    - github-cli
+    - github-mcp-server
+    - golang
+    - mcp
+    - model-context-protocol
+  labels:
+    - name: dependencies
+      color: ededed
+    - name: renovate:major
+      color: e8c936
+  features:
+    issues: true
+    projects: false
+    wiki: false
+    discussions: false
+    pull_requests: true
+  merge_strategy:
+    allow_merge_commit: true
+    allow_squash_merge: false
+    allow_rebase_merge: false
+    allow_auto_merge: true
+    auto_delete_head_branches: true
+    squash_merge_commit_title: COMMIT_OR_PR_TITLE
+    squash_merge_commit_message: COMMIT_MESSAGES
+    merge_commit_title: MERGE_MESSAGE
+    merge_commit_message: PR_TITLE
+  release_immutability: true
+  security:
+    vulnerability_alerts: true
+    automated_security_fixes: true
+    private_vulnerability_reporting: true
+  rulesets:
+    - name: default
+      target: branch
+      enforcement: active
+      conditions:
+        ref_name:
+          include:
+            - ~DEFAULT_BRANCH
+      rules:
+        non_fast_forward: true
+        deletion: true
+        creation: false
+        required_linear_history: false
+        required_signatures: true
+    - name: pull-request-gate
+      target: branch
+      enforcement: active
+      bypass_actors:
+        - role: admin
+          bypass_mode: always
+      conditions:
+        ref_name:
+          include:
+            - ~DEFAULT_BRANCH
+      rules:
+        pull_request:
+          required_approving_review_count: 0
+          dismiss_stale_reviews_on_push: false
+          require_code_owner_review: false
+          require_last_push_approval: false
+          required_review_thread_resolution: true
+        required_status_checks:
+          strict_required_status_checks_policy: true
+          contexts:
+            - context: Lint
+              app: github-actions
+            - context: Build
+              app: github-actions
+            - context: Test (macos-latest)
+              app: github-actions
+            - context: Test (ubuntu-latest)
+              app: github-actions
+            - context: Test (windows-latest)
+              app: github-actions
+  variables:
+    - name: APP_ID
+      value: "1460880"
+  actions:
+    enabled: true
+    allowed_actions: selected
+    sha_pinning_required: true
+    workflow_permissions: read
+    can_approve_pull_requests: false
+    selected_actions:
+      github_owned_allowed: false
+      verified_allowed: false
+      patterns_allowed:
+        - actions/attest@*
+        - actions/attest-build-provenance@*
+        - actions/cache@*
+        - actions/checkout@*
+        - actions/create-github-app-token@*
+        - actions/github-script@*
+        - actions/setup-go@*
+        - actions/upload-artifact@*
+        - cli/gh-extension-precompile@*
+        - go-task/setup-task@*
+        - golangci/golangci-lint-action@*
+        - k1LoW/gh-setup@*
+        - k1LoW/octocov-action@*
+    fork_pr_approval: all_external_contributors
