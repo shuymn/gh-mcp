@@ -90,6 +90,7 @@ stub_gh() {
   [[ "${1:-}" == api ]] || fail "unexpected gh command: $*"
 
   local endpoint
+  local asset_id
   endpoint="$(find_api_endpoint "$@")" || fail "gh api endpoint is missing: $*"
 
   case "${GH_STUB_SCENARIO:?}" in
@@ -146,6 +147,12 @@ stub_gh() {
           return 0
           ;;
         */releases/assets/*)
+          asset_id="${endpoint##*/}"
+          [[ "$asset_id" =~ ^[1-9][0-9]*$ ]] ||
+            fail "unexpected draft release asset ID: ${asset_id}"
+          ((asset_id <= ${#EXPECTED_RELEASE_ASSETS[@]})) ||
+            fail "unexpected draft release asset ID: ${asset_id}"
+          printf '%s\n' "$asset_id" >>"${DRAFT_ASSET_ID_LOG:?}"
           printf 'asset data'
           return 0
           ;;
@@ -343,10 +350,14 @@ test_release_selects_higher_published_release() {
 test_release_verifies_draft_by_asset_id() {
   local stderr="${TEST_ROOT}/draft-release-stderr"
   local runner_temp="${TEST_ROOT}/draft-release-runner"
+  local asset_id_log="${TEST_ROOT}/draft-release-asset-ids"
+  local asset_id
 
   mkdir -p "$runner_temp"
+  : >"$asset_id_log"
   if ! PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
     GH_STUB_SCENARIO=draft-release \
+    DRAFT_ASSET_ID_LOG="$asset_id_log" \
     GITHUB_REPOSITORY=test/repository \
     RELEASE_TAG="v${current_version}" \
     RUNNER_TEMP="$runner_temp" \
@@ -356,6 +367,10 @@ test_release_verifies_draft_by_asset_id() {
     fail_command "$stderr" "verifying a draft release by asset ID"
   fi
 
+  for ((asset_id = 1; asset_id <= ${#EXPECTED_RELEASE_ASSETS[@]}; asset_id++)); do
+    [[ "$(grep -Fxc -- "$asset_id" "$asset_id_log")" == 1 ]] ||
+      fail "draft release asset ID ${asset_id} was not downloaded exactly once"
+  done
   echo "ok - release verifies a draft release by asset ID"
 }
 
