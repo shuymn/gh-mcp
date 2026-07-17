@@ -16,6 +16,20 @@ readonly -a EXPECTED_RELEASE_ASSETS=(
   windows-amd64.exe
   windows-arm64.exe
 )
+readonly -a EXPECTED_DRAFT_ASSET_IDS=(
+  11
+  23
+  37
+  53
+  71
+  97
+  127
+  163
+  211
+  269
+  337
+  419
+)
 
 fail() {
   echo "not ok - $*" >&2
@@ -58,6 +72,33 @@ find_api_endpoint() {
   return 1
 }
 
+has_api_header() {
+  local expected=$1
+  shift
+
+  while (($#)); do
+    case "$1" in
+      -H | --header)
+        [[ "${2:-}" == "$expected" ]] && return 0
+        ;;
+    esac
+    shift
+  done
+  return 1
+}
+
+is_expected_draft_asset_id() {
+  local actual=$1
+  local expected
+
+  for expected in "${EXPECTED_DRAFT_ASSET_IDS[@]}"; do
+    if [[ "$actual" == "$expected" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 print_reordered_release_assets() {
   local index
 
@@ -73,7 +114,8 @@ print_draft_release() {
   printf '[{"id":1,"tag_name":"%s","draft":true,"assets":[' "${RELEASE_TAG:?}"
   for ((index = 0; index < ${#EXPECTED_RELEASE_ASSETS[@]}; index++)); do
     printf '%s{"id":%d,"name":"%s"}' \
-      "$separator" "$((index + 1))" "${EXPECTED_RELEASE_ASSETS[$index]}"
+      "$separator" "${EXPECTED_DRAFT_ASSET_IDS[$index]}" \
+      "${EXPECTED_RELEASE_ASSETS[$index]}"
     separator=,
   done
   printf ']}]\n'
@@ -147,10 +189,10 @@ stub_gh() {
           return 0
           ;;
         */releases/assets/*)
+          has_api_header 'Accept: application/octet-stream' "$@" ||
+            fail "draft release asset request is missing the binary Accept header"
           asset_id="${endpoint##*/}"
-          [[ "$asset_id" =~ ^[1-9][0-9]*$ ]] ||
-            fail "unexpected draft release asset ID: ${asset_id}"
-          ((asset_id <= ${#EXPECTED_RELEASE_ASSETS[@]})) ||
+          is_expected_draft_asset_id "$asset_id" ||
             fail "unexpected draft release asset ID: ${asset_id}"
           printf '%s\n' "$asset_id" >>"${DRAFT_ASSET_ID_LOG:?}"
           printf 'asset data'
@@ -351,7 +393,6 @@ test_release_verifies_draft_by_asset_id() {
   local stderr="${TEST_ROOT}/draft-release-stderr"
   local runner_temp="${TEST_ROOT}/draft-release-runner"
   local asset_id_log="${TEST_ROOT}/draft-release-asset-ids"
-  local asset_id
 
   mkdir -p "$runner_temp"
   : >"$asset_id_log"
@@ -367,10 +408,8 @@ test_release_verifies_draft_by_asset_id() {
     fail_command "$stderr" "verifying a draft release by asset ID"
   fi
 
-  for ((asset_id = 1; asset_id <= ${#EXPECTED_RELEASE_ASSETS[@]}; asset_id++)); do
-    [[ "$(grep -Fxc -- "$asset_id" "$asset_id_log")" == 1 ]] ||
-      fail "draft release asset ID ${asset_id} was not downloaded exactly once"
-  done
+  sort -n -o "$asset_id_log" "$asset_id_log"
+  assert_exact_output "$asset_id_log" "${EXPECTED_DRAFT_ASSET_IDS[@]}"
   echo "ok - release verifies a draft release by asset ID"
 }
 
