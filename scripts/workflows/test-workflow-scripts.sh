@@ -66,7 +66,27 @@ print_reordered_release_assets() {
   done
 }
 
+print_draft_release() {
+  local index
+  local separator=""
+
+  printf '[{"id":1,"tag_name":"%s","draft":true,"assets":[' "${RELEASE_TAG:?}"
+  for ((index = 0; index < ${#EXPECTED_RELEASE_ASSETS[@]}; index++)); do
+    printf '%s{"id":%d,"name":"%s"}' \
+      "$separator" "$((index + 1))" "${EXPECTED_RELEASE_ASSETS[$index]}"
+    separator=,
+  done
+  printf ']}]\n'
+}
+
 stub_gh() {
+  if [[ "${1:-}" == attestation ]]; then
+    [[ "${GH_STUB_SCENARIO:?}" == draft-release ]] ||
+      fail "unexpected gh command: $*"
+    [[ "${2:-}" == verify && -s "${3:-}" ]] ||
+      fail "invalid attestation verification: $*"
+    return 0
+  fi
   [[ "${1:-}" == api ]] || fail "unexpected gh command: $*"
 
   local endpoint
@@ -115,6 +135,18 @@ stub_gh() {
         */releases/tags/*)
           printf 'true\n'
           print_reordered_release_assets
+          return 0
+          ;;
+      esac
+      ;;
+    draft-release)
+      case "$endpoint" in
+        */releases\?per_page=100)
+          print_draft_release
+          return 0
+          ;;
+        */releases/assets/*)
+          printf 'asset data'
           return 0
           ;;
       esac
@@ -308,8 +340,28 @@ test_release_selects_higher_published_release() {
   echo "ok - release select accepts reordered assets for a higher immutable release"
 }
 
+test_release_verifies_draft_by_asset_id() {
+  local stderr="${TEST_ROOT}/draft-release-stderr"
+  local runner_temp="${TEST_ROOT}/draft-release-runner"
+
+  mkdir -p "$runner_temp"
+  if ! PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=draft-release \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_TAG="v${current_version}" \
+    RUNNER_TEMP="$runner_temp" \
+    SOURCE_DIGEST="$TARGET_SHA" \
+    "$RELEASE_SCRIPT" verify-draft \
+    >/dev/null 2>"$stderr"; then
+    fail_command "$stderr" "verifying a draft release by asset ID"
+  fi
+
+  echo "ok - release verifies a draft release by asset ID"
+}
+
 test_prepare_rejects_failed_scope_inspection
 test_release_selects_missing_release
 test_release_rejects_related_unpublished_tag
 test_release_resumes_same_target_unpublished_tag
 test_release_selects_higher_published_release
+test_release_verifies_draft_by_asset_id
