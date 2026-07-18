@@ -53,6 +53,9 @@ spec:
     - name: default
       target: branch
       enforcement: active
+      bypass_actors:
+        - app: "id:1460880"
+          bypass_mode: pull_request
       conditions:
         ref_name:
           include:

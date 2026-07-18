@@ -52,28 +52,24 @@ assert_exact_assets() {
   done
 }
 
-assert_release_metadata() {
+assert_published_release_metadata() {
   local tag=$1
-  local field=$2
-  local expected_value=$3
-  local metadata_error=$4
-  local asset_label=$5
   local release_details_output
   local -a release_details
 
   release_details_output="$(
     gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" \
-      --jq "${field}, ([.assets[].name] | sort | .[])"
+      --jq '.immutable, ([.assets[].name] | sort | .[])'
   )"
   mapfile -t release_details <<<"$release_details_output"
-  if [[ "${release_details[0]:-}" != "$expected_value" ]]; then
-    die "$metadata_error"
+  if [[ "${release_details[0]:-}" != true ]]; then
+    die "Published release ${tag} is not immutable."
   fi
-  assert_exact_assets "$asset_label" "${release_details[@]:1}"
+  assert_exact_assets "Published release ${tag}" "${release_details[@]:1}"
 }
 
-verify_asset_attestations() {
-  local tag=$1
+verify_downloaded_asset_attestations() {
+  local label=$1
   local provenance_digest=$2
   local assets_dir=$3
   local asset
@@ -81,25 +77,59 @@ verify_asset_attestations() {
   local -a downloaded_assets=()
   local -a downloaded_paths
 
-  mkdir -p "$assets_dir"
-  gh release download "$tag" \
-    --repo "$GITHUB_REPOSITORY" \
-    --pattern '*' \
-    --dir "$assets_dir"
   shopt -s dotglob nullglob
   downloaded_paths=("$assets_dir"/*)
   shopt -u dotglob nullglob
   for path in "${downloaded_paths[@]}"; do
-    [[ -f "$path" ]] || die "Downloaded release ${tag} contains a non-file asset."
+    [[ -f "$path" ]] || die "${label} contains a non-file asset."
     downloaded_assets+=("${path##*/}")
   done
-  assert_exact_assets "Downloaded release ${tag}" "${downloaded_assets[@]}"
+  assert_exact_assets "$label" "${downloaded_assets[@]}"
   for asset in "${EXPECTED_RELEASE_ASSETS[@]}"; do
     gh attestation verify "${assets_dir}/${asset}" \
       --repo "$GITHUB_REPOSITORY" \
       --signer-workflow "$SIGNER_WORKFLOW" \
       --source-digest "$provenance_digest" \
       --deny-self-hosted-runners >/dev/null
+  done
+}
+
+load_draft_release() {
+  local tag=$1
+
+  gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" |
+    jq -cser --arg tag "$tag" '
+      [.[][] | select(.tag_name == $tag and .draft == true)] |
+      if length == 1 then .[0] else empty end
+    '
+}
+
+download_draft_release_assets() {
+  local tag=$1
+  local draft_release=$2
+  local assets_dir=$3
+  local asset_rows_output
+  local row asset_id asset_name
+  local -a asset_rows=()
+  local -a asset_names=()
+
+  asset_rows_output="$(
+    jq -r '.assets[] | [.id, .name] | @tsv' <<<"$draft_release"
+  )" || die "Failed to parse draft release ${tag} assets."
+  mapfile -t asset_rows < <(printf '%s' "$asset_rows_output")
+  for row in "${asset_rows[@]}"; do
+    IFS=$'\t' read -r asset_id asset_name <<<"$row"
+    [[ "$asset_id" =~ ^[1-9][0-9]*$ ]] || die "Draft release ${tag} has an invalid asset ID."
+    asset_names+=("$asset_name")
+  done
+  assert_exact_assets "Draft release ${tag}" "${asset_names[@]}"
+
+  mkdir -p "$assets_dir"
+  for row in "${asset_rows[@]}"; do
+    IFS=$'\t' read -r asset_id asset_name <<<"$row"
+    gh api \
+      -H 'Accept: application/octet-stream' \
+      "repos/${GITHUB_REPOSITORY}/releases/assets/${asset_id}" >"${assets_dir}/${asset_name}"
   done
 }
 
@@ -181,9 +211,7 @@ select_release() {
       ! git merge-base --is-ancestor "$TARGET_SHA" "$tag_target"; then
       die "Published tag ${tag} and ${TARGET_SHA} are unrelated."
     fi
-    assert_release_metadata "$tag" '.immutable' true \
-      "Published release ${tag} is not immutable." \
-      "Published release ${tag}"
+    assert_published_release_metadata "$tag"
 
     echo "Release ${tag} is already published with the expected metadata."
     {
@@ -223,13 +251,17 @@ verify_published_release() {
 
   local assets_dir marker
 
-  assert_release_metadata "$RELEASE_TAG" '.immutable' true \
-    "Published release ${RELEASE_TAG} is not immutable." \
-    "Published release ${RELEASE_TAG}"
+  assert_published_release_metadata "$RELEASE_TAG"
   gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
 
   assets_dir="${RUNNER_TEMP}/release-assets"
-  verify_asset_attestations "$RELEASE_TAG" "$SOURCE_DIGEST" "$assets_dir"
+  mkdir -p "$assets_dir"
+  gh release download "$RELEASE_TAG" \
+    --repo "$GITHUB_REPOSITORY" \
+    --pattern '*' \
+    --dir "$assets_dir"
+  verify_downloaded_asset_attestations \
+    "Downloaded release ${RELEASE_TAG}" "$SOURCE_DIGEST" "$assets_dir"
 
   mkdir -p .release-provenance
   marker=".release-provenance/${RELEASE_TAG}-${SOURCE_DIGEST}"
@@ -252,14 +284,15 @@ verify_draft_release() {
   require_env RUNNER_TEMP
   require_env SOURCE_DIGEST
 
-  local assets_dir
+  local assets_dir draft_release
 
-  assert_release_metadata "$RELEASE_TAG" '.draft' true \
-    "Release ${RELEASE_TAG} is not a draft." \
-    "Draft release ${RELEASE_TAG}"
+  draft_release="$(load_draft_release "$RELEASE_TAG")" ||
+    die "Draft release ${RELEASE_TAG} was not found."
 
   assets_dir="${RUNNER_TEMP}/draft-release-assets"
-  verify_asset_attestations "$RELEASE_TAG" "$SOURCE_DIGEST" "$assets_dir"
+  download_draft_release_assets "$RELEASE_TAG" "$draft_release" "$assets_dir"
+  verify_downloaded_asset_attestations \
+    "Downloaded draft release ${RELEASE_TAG}" "$SOURCE_DIGEST" "$assets_dir"
 }
 
 usage() {

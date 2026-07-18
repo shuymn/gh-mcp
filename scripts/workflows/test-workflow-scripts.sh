@@ -16,6 +16,20 @@ readonly -a EXPECTED_RELEASE_ASSETS=(
   windows-amd64.exe
   windows-arm64.exe
 )
+readonly -a EXPECTED_DRAFT_ASSET_IDS=(
+  11
+  23
+  37
+  53
+  71
+  97
+  127
+  163
+  211
+  269
+  337
+  419
+)
 
 fail() {
   echo "not ok - $*" >&2
@@ -58,6 +72,33 @@ find_api_endpoint() {
   return 1
 }
 
+has_api_header() {
+  local expected=$1
+  shift
+
+  while (($#)); do
+    case "$1" in
+      -H | --header)
+        [[ "${2:-}" == "$expected" ]] && return 0
+        ;;
+    esac
+    shift
+  done
+  return 1
+}
+
+is_expected_draft_asset_id() {
+  local actual=$1
+  local expected
+
+  for expected in "${EXPECTED_DRAFT_ASSET_IDS[@]}"; do
+    if [[ "$actual" == "$expected" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 print_reordered_release_assets() {
   local index
 
@@ -66,10 +107,32 @@ print_reordered_release_assets() {
   done
 }
 
+print_draft_release() {
+  local index
+  local separator=""
+
+  printf '[{"id":1,"tag_name":"%s","draft":true,"assets":[' "${RELEASE_TAG:?}"
+  for ((index = 0; index < ${#EXPECTED_RELEASE_ASSETS[@]}; index++)); do
+    printf '%s{"id":%d,"name":"%s"}' \
+      "$separator" "${EXPECTED_DRAFT_ASSET_IDS[$index]}" \
+      "${EXPECTED_RELEASE_ASSETS[$index]}"
+    separator=,
+  done
+  printf ']}]\n'
+}
+
 stub_gh() {
+  if [[ "${1:-}" == attestation ]]; then
+    [[ "${GH_STUB_SCENARIO:?}" == draft-release ]] ||
+      fail "unexpected gh command: $*"
+    [[ "${2:-}" == verify && -s "${3:-}" ]] ||
+      fail "invalid attestation verification: $*"
+    return 0
+  fi
   [[ "${1:-}" == api ]] || fail "unexpected gh command: $*"
 
   local endpoint
+  local asset_id
   endpoint="$(find_api_endpoint "$@")" || fail "gh api endpoint is missing: $*"
 
   case "${GH_STUB_SCENARIO:?}" in
@@ -115,6 +178,24 @@ stub_gh() {
         */releases/tags/*)
           printf 'true\n'
           print_reordered_release_assets
+          return 0
+          ;;
+      esac
+      ;;
+    draft-release)
+      case "$endpoint" in
+        */releases\?per_page=100)
+          print_draft_release
+          return 0
+          ;;
+        */releases/assets/*)
+          has_api_header 'Accept: application/octet-stream' "$@" ||
+            fail "draft release asset request is missing the binary Accept header"
+          asset_id="${endpoint##*/}"
+          is_expected_draft_asset_id "$asset_id" ||
+            fail "unexpected draft release asset ID: ${asset_id}"
+          printf '%s\n' "$asset_id" >>"${DRAFT_ASSET_ID_LOG:?}"
+          printf 'asset data'
           return 0
           ;;
       esac
@@ -308,8 +389,33 @@ test_release_selects_higher_published_release() {
   echo "ok - release select accepts reordered assets for a higher immutable release"
 }
 
+test_release_verifies_draft_by_asset_id() {
+  local stderr="${TEST_ROOT}/draft-release-stderr"
+  local runner_temp="${TEST_ROOT}/draft-release-runner"
+  local asset_id_log="${TEST_ROOT}/draft-release-asset-ids"
+
+  mkdir -p "$runner_temp"
+  : >"$asset_id_log"
+  if ! PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=draft-release \
+    DRAFT_ASSET_ID_LOG="$asset_id_log" \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_TAG="v${current_version}" \
+    RUNNER_TEMP="$runner_temp" \
+    SOURCE_DIGEST="$TARGET_SHA" \
+    "$RELEASE_SCRIPT" verify-draft \
+    >/dev/null 2>"$stderr"; then
+    fail_command "$stderr" "verifying a draft release by asset ID"
+  fi
+
+  sort -n -o "$asset_id_log" "$asset_id_log"
+  assert_exact_output "$asset_id_log" "${EXPECTED_DRAFT_ASSET_IDS[@]}"
+  echo "ok - release verifies a draft release by asset ID"
+}
+
 test_prepare_rejects_failed_scope_inspection
 test_release_selects_missing_release
 test_release_rejects_related_unpublished_tag
 test_release_resumes_same_target_unpublished_tag
 test_release_selects_higher_published_release
+test_release_verifies_draft_by_asset_id
