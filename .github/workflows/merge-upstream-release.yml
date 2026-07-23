@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Checkout trusted workflow tools
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
           path: workflow
@@ -42,7 +42,7 @@ jobs:
 
       - name: Checkout exact current base
         if: steps.inspect.outputs.current == 'true'
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.inspect.outputs.base_sha }}
           path: trusted
@@ -51,7 +51,7 @@ jobs:
 
       - name: Checkout exact tested head
         if: steps.inspect.outputs.current == 'true'
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.inspect.outputs.head_sha }}
           path: candidate
