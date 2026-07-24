@@ -1,3 +1,3 @@
 package main
 
-const mcpServerVersion = "v1.6.0"
+const mcpServerVersion = "v1.7.0"
