@@ -107,6 +107,10 @@ jobs:
           PR_NUMBER: ${{ steps.inspect.outputs.pr_number }}
           BASE_SHA: ${{ steps.inspect.outputs.base_sha }}
           HEAD_SHA: ${{ steps.inspect.outputs.head_sha }}
+          CURRENT_RELEASE: ${{ steps.prepare.outputs.current_release }}
+          CURRENT_UPSTREAM: ${{ steps.prepare.outputs.current_upstream }}
+          NEXT_UPSTREAM: ${{ steps.prepare.outputs.upstream }}
         run: >-
           trusted/scripts/workflows/merge-upstream-release.sh
           merge "$PR_NUMBER" "$BASE_SHA" "$HEAD_SHA"
+          "$CURRENT_RELEASE" "$CURRENT_UPSTREAM" "$NEXT_UPSTREAM"

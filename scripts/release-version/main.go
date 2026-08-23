@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -13,10 +15,12 @@ const (
 	autoMergeArgumentCount = 4
 	nextArgumentCount      = 5
 	validateArgumentCount  = 6
+	validateOrderArgCount  = 4
 	versionComponentCount  = 3
 	autoMergeCommand       = "auto-merge"
 	nextCommand            = "next"
 	validateCommand        = "validate"
+	validateOrderCommand   = "validate-order"
 )
 
 var (
@@ -24,7 +28,8 @@ var (
 		"usage: release-version next <current-release> <current-upstream> <next-upstream> | " +
 			"release-version auto-merge <current-upstream> <next-upstream> | " +
 			"release-version validate <current-release> <next-release> " +
-			"<current-upstream> <next-upstream>",
+			"<current-upstream> <next-upstream> | " +
+			"release-version validate-order <current-upstream> <next-upstream>",
 	)
 	errMissingVPrefix      = errors.New("missing v prefix")
 	errUnexpectedVPrefix   = errors.New("unexpected v prefix")
@@ -35,6 +40,8 @@ var (
 	errReleaseRegressed    = errors.New("release version must not decrease")
 	errUnexpectedRelease   = errors.New("release version does not match the upstream update")
 	errUpstreamVersionBack = errors.New("upstream version must not decrease")
+	errUpstreamNotReleased = errors.New("next upstream version is not a published stable release")
+	errUpstreamReleaseSkip = errors.New("earlier upstream release must be applied first")
 )
 
 type version struct {
@@ -44,13 +51,13 @@ type version struct {
 }
 
 func main() {
-	if err := run(os.Args); err != nil {
+	if err := run(os.Args, os.Stdin); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(args []string) error {
+func run(args []string, stdin io.Reader) error {
 	if len(args) < minimumArgumentCount {
 		return errUsage
 	}
@@ -81,9 +88,33 @@ func run(args []string) error {
 			return errUsage
 		}
 		return validateReleaseTransition(args[2], args[3], args[4], args[5])
+	case validateOrderCommand:
+		if len(args) != validateOrderArgCount {
+			return errUsage
+		}
+		releaseTags, err := readReleaseTags(stdin)
+		if err != nil {
+			return err
+		}
+		return validateUpstreamReleaseOrder(args[2], args[3], releaseTags)
 	default:
 		return errUsage
 	}
+}
+
+func readReleaseTags(reader io.Reader) ([]string, error) {
+	var releaseTags []string
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		if tag := strings.TrimSpace(scanner.Text()); tag != "" {
+			releaseTags = append(releaseTags, tag)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read upstream releases: %w", err)
+	}
+
+	return releaseTags, nil
 }
 
 func autoMergeUpstreamUpdate(currentUpstream string, nextUpstream string) (bool, error) {
@@ -122,6 +153,49 @@ func parseUpstreamUpdate(currentUpstream string, nextUpstream string) (version, 
 	}
 
 	return current, next, nil
+}
+
+func validateUpstreamReleaseOrder(
+	currentUpstream string,
+	nextUpstream string,
+	releaseTags []string,
+) error {
+	current, next, err := parseUpstreamUpdate(currentUpstream, nextUpstream)
+	if err != nil {
+		return err
+	}
+
+	candidateFound := false
+	var earliest version
+	earliestTag := ""
+	for _, tag := range releaseTags {
+		release, parseErr := parseVersion(tag, true)
+		if parseErr != nil {
+			continue
+		}
+		if compareVersions(release, next) == 0 {
+			candidateFound = true
+		}
+		if compareVersions(release, current) > 0 &&
+			(earliestTag == "" || compareVersions(release, earliest) < 0) {
+			earliest = release
+			earliestTag = tag
+		}
+	}
+
+	if !candidateFound {
+		return fmt.Errorf("%w: %q", errUpstreamNotReleased, nextUpstream)
+	}
+	if compareVersions(next, earliest) != 0 {
+		return fmt.Errorf(
+			"%w: %q precedes %q",
+			errUpstreamReleaseSkip,
+			earliestTag,
+			nextUpstream,
+		)
+	}
+
+	return nil
 }
 
 func nextReleaseVersion(

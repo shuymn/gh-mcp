@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestNextReleaseVersion(t *testing.T) {
 	t.Parallel()
@@ -118,6 +121,99 @@ func TestNextReleaseVersionRejectsInvalidInput(t *testing.T) {
 				test.nextUpstream,
 			); err == nil {
 				t.Fatal("nextReleaseVersion succeeded, want error")
+			}
+		})
+	}
+}
+
+func TestValidateUpstreamReleaseOrder(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		currentUpstream string
+		nextUpstream    string
+		releaseTags     []string
+	}{
+		{
+			name:            "next minor release",
+			currentUpstream: "v1.9.0",
+			nextUpstream:    "v1.10.0",
+			releaseTags:     []string{"v1.11.0", "v1.10.1", "v1.10.0", "v1.9.0"},
+		},
+		{
+			name:            "next patch release",
+			currentUpstream: "v1.10.0",
+			nextUpstream:    "v1.10.1",
+			releaseTags:     []string{"v1.10.2", "v1.10.1", "v1.10.0"},
+		},
+		{
+			name:            "ignores non-semver release names",
+			currentUpstream: "v1.10.0",
+			nextUpstream:    "v1.10.1",
+			releaseTags:     []string{"latest", "v1.10.1", "v1.10.0"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			if err := validateUpstreamReleaseOrder(
+				test.currentUpstream,
+				test.nextUpstream,
+				test.releaseTags,
+			); err != nil {
+				t.Fatalf("validateUpstreamReleaseOrder returned error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateUpstreamReleaseOrderRejectsInvalidOrder(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		currentUpstream string
+		nextUpstream    string
+		releaseTags     []string
+		wantError       error
+	}{
+		{
+			name:            "skipped patch",
+			currentUpstream: "v1.9.0",
+			nextUpstream:    "v1.10.1",
+			releaseTags:     []string{"v1.10.1", "v1.10.0", "v1.9.0"},
+			wantError:       errUpstreamReleaseSkip,
+		},
+		{
+			name:            "skipped minor stream",
+			currentUpstream: "v1.9.0",
+			nextUpstream:    "v1.11.0",
+			releaseTags:     []string{"v1.11.0", "v1.10.1", "v1.10.0", "v1.9.0"},
+			wantError:       errUpstreamReleaseSkip,
+		},
+		{
+			name:            "candidate is absent",
+			currentUpstream: "v1.9.0",
+			nextUpstream:    "v1.10.0",
+			releaseTags:     []string{"v1.9.0"},
+			wantError:       errUpstreamNotReleased,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateUpstreamReleaseOrder(
+				test.currentUpstream,
+				test.nextUpstream,
+				test.releaseTags,
+			)
+			if !errors.Is(err, test.wantError) {
+				t.Fatalf("validateUpstreamReleaseOrder error = %v, want %v", err, test.wantError)
 			}
 		})
 	}

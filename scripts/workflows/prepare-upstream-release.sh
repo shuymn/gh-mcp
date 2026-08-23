@@ -53,6 +53,8 @@ is_release_file() {
 
 DIFF_HAS_CHANGES=false
 AUTO_MERGE=false
+CURRENT_RELEASE_VERSION=""
+CURRENT_UPSTREAM_VERSION=""
 NEXT_RELEASE_VERSION=""
 NEXT_UPSTREAM_VERSION=""
 
@@ -147,21 +149,21 @@ extract_upstream_version() {
 
 determine_version() {
   local base_sha="$1"
-  local current_release
-  local current_upstream
 
-  current_release="$(git show "${base_sha}:VERSION")"
-  current_upstream="$(git show "${base_sha}:mcp_version.go" | extract_upstream_version)"
+  CURRENT_RELEASE_VERSION="$(git show "${base_sha}:VERSION")"
+  CURRENT_UPSTREAM_VERSION="$(git show "${base_sha}:mcp_version.go" | extract_upstream_version)"
   NEXT_UPSTREAM_VERSION="$(extract_upstream_version <mcp_version.go)"
+  "${TRUSTED_ROOT}/scripts/workflows/validate-upstream-release-order.sh" \
+    "$CURRENT_UPSTREAM_VERSION" "$NEXT_UPSTREAM_VERSION"
   NEXT_RELEASE_VERSION="$(
     cd "$TRUSTED_ROOT"
     go run ./scripts/release-version next \
-      "$current_release" "$current_upstream" "$NEXT_UPSTREAM_VERSION"
+      "$CURRENT_RELEASE_VERSION" "$CURRENT_UPSTREAM_VERSION" "$NEXT_UPSTREAM_VERSION"
   )"
   AUTO_MERGE="$(
     cd "$TRUSTED_ROOT"
     go run ./scripts/release-version auto-merge \
-      "$current_upstream" "$NEXT_UPSTREAM_VERSION"
+      "$CURRENT_UPSTREAM_VERSION" "$NEXT_UPSTREAM_VERSION"
   )"
 }
 
@@ -200,6 +202,8 @@ prepare_release() {
 
   {
     echo "release=${NEXT_RELEASE_VERSION}"
+    echo "current_release=${CURRENT_RELEASE_VERSION}"
+    echo "current_upstream=${CURRENT_UPSTREAM_VERSION}"
     echo "upstream=${NEXT_UPSTREAM_VERSION}"
     echo "changed=${DIFF_HAS_CHANGES}"
     echo "auto_merge=${AUTO_MERGE}"
