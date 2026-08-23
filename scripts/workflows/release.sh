@@ -3,6 +3,8 @@
 set -euo pipefail
 
 readonly SIGNER_WORKFLOW="shuymn/gh-mcp/.github/workflows/release.yml"
+readonly DRAFT_RELEASE_LOOKUP_ATTEMPTS=5
+readonly DRAFT_RELEASE_LOOKUP_DELAY_SECONDS=2
 readonly -a EXPECTED_RELEASE_ASSETS=(
   darwin-amd64
   darwin-arm64
@@ -96,12 +98,113 @@ verify_downloaded_asset_attestations() {
 
 load_draft_release() {
   local tag=$1
+  local attempt
+  local api_status
+  local parse_status
+  local response
+  local lookup_result
+  local lookup_status
 
-  gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" |
-    jq -cser --arg tag "$tag" '
-      [.[][] | select(.tag_name == $tag and .draft == true)] |
-      if length == 1 then .[0] else empty end
-    '
+  for ((attempt = 1; attempt <= DRAFT_RELEASE_LOOKUP_ATTEMPTS; attempt++)); do
+    if response="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100")"; then
+      :
+    else
+      api_status=$?
+      echo "Failed to list releases while looking for draft ${tag} (gh api exited with status ${api_status})." >&2
+      return 2
+    fi
+
+    if lookup_result="$(
+      jq -cs --arg tag "$tag" '
+        [ .[][] | select(.tag_name == $tag) ] |
+        if length == 0 then
+          {status: "missing"}
+        elif length > 1 then
+          {status: "ambiguous"}
+        elif .[0].draft == true then
+          {status: "draft", release: .[0]}
+        else
+          {status: "published"}
+        end
+      ' <<<"$response"
+    )"; then
+      :
+    else
+      parse_status=$?
+      echo "Failed to parse release list while looking for draft ${tag} (jq exited with status ${parse_status})." >&2
+      return 2
+    fi
+
+    if lookup_status="$(jq -r '.status' <<<"$lookup_result")"; then
+      :
+    else
+      echo "Failed to classify release list while looking for draft ${tag}." >&2
+      return 2
+    fi
+
+    case "$lookup_status" in
+      draft)
+        jq -c '.release' <<<"$lookup_result"
+        return 0
+        ;;
+      missing)
+        if ((attempt < DRAFT_RELEASE_LOOKUP_ATTEMPTS)); then
+          echo "Draft release ${tag} is not visible yet; retrying in ${DRAFT_RELEASE_LOOKUP_DELAY_SECONDS}s (${attempt}/${DRAFT_RELEASE_LOOKUP_ATTEMPTS})." >&2
+          sleep "$DRAFT_RELEASE_LOOKUP_DELAY_SECONDS"
+        fi
+        ;;
+      ambiguous)
+        echo "Multiple releases found for tag ${tag}." >&2
+        return 2
+        ;;
+      published)
+        echo "Release ${tag} is already published, not a draft." >&2
+        return 2
+        ;;
+      *)
+        echo "Unexpected release lookup status for ${tag}: ${lookup_status}." >&2
+        return 2
+        ;;
+    esac
+  done
+
+  return 1
+}
+
+highest_published_version() {
+  local release_inventory=$1
+
+  awk -F '\t' '$2 == "false" { print $1 }' <<<"$release_inventory" |
+    sed -nE 's/^v((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))$/\1/p' |
+    sort -V |
+    tail -n 1
+}
+
+assert_release_is_current() {
+  local tag=$1
+  local version release_inventory highest_published highest_candidate
+
+  if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+    die "Release tag ${tag} is not canonical."
+  fi
+  version="${tag#v}"
+  if release_inventory="$(
+    gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+      --jq '.[] | [.tag_name, .draft] | @tsv'
+  )"; then
+    :
+  else
+    die "Failed to list releases before publishing ${tag}."
+  fi
+  highest_published="$(highest_published_version "$release_inventory")"
+  if [[ -n "$highest_published" ]]; then
+    highest_candidate="$(
+      printf '%s\n' "$version" "$highest_published" | sort -V | tail -n 1
+    )"
+    if [[ "$highest_candidate" != "$version" ]]; then
+      die "Release ${tag} is superseded by published v${highest_published}."
+    fi
+  fi
 }
 
 download_draft_release_assets() {
@@ -159,6 +262,49 @@ resolve_tag_target() {
   esac
 }
 
+assert_tag_target() {
+  local tag=$1
+  local expected_target=$2
+  local actual_target
+
+  if actual_target="$(resolve_tag_target "$tag")"; then
+    :
+  else
+    die "Failed to resolve tag ${tag} before publishing."
+  fi
+  if [[ "$actual_target" != "$expected_target" ]]; then
+    die "Tag ${tag} resolves to ${actual_target:-no target}, expected ${expected_target}."
+  fi
+}
+
+assert_draft_release_unchanged() {
+  local tag=$1
+  local expected_release=$2
+  local release_id current_release
+
+  if release_id="$(jq -er '.id | select(type == "number" and . > 0) | tostring' <<<"$expected_release")"; then
+    :
+  else
+    die "Draft release ${tag} has an invalid release ID."
+  fi
+  if current_release="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${release_id}")"; then
+    :
+  else
+    die "Failed to recheck draft release ${tag}."
+  fi
+  if ! jq -e \
+    --arg tag "$tag" \
+    --argjson expected "$expected_release" \
+    '.id == $expected.id and
+      .tag_name == $tag and
+      .draft == true and
+      ([.assets[] | {id, name}] | sort_by(.id)) ==
+      ([$expected.assets[] | {id, name}] | sort_by(.id))' \
+    <<<"$current_release" >/dev/null; then
+    die "Draft release ${tag} changed while it was being verified."
+  fi
+}
+
 select_release() {
   require_env GITHUB_OUTPUT
   require_env GITHUB_REPOSITORY
@@ -177,12 +323,7 @@ select_release() {
     gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
       --jq '.[] | [.tag_name, .draft] | @tsv'
   )"
-  highest_published="$(
-    awk -F '\t' '$2 == "false" { print $1 }' <<<"$release_inventory" |
-      sed -nE 's/^v((0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))$/\1/p' |
-      sort -V |
-      tail -n 1
-  )"
+  highest_published="$(highest_published_version "$release_inventory")"
   if [[ -n "$highest_published" ]]; then
     highest_candidate="$(printf '%s\n' "$version" "$highest_published" | sort -V | tail -n 1)"
     if [[ "$highest_candidate" != "$version" ]]; then
@@ -273,6 +414,7 @@ create_release_tag() {
   require_env RELEASE_TAG
   require_env TARGET_SHA
 
+  assert_release_is_current "$RELEASE_TAG"
   gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
     -f ref="refs/tags/${RELEASE_TAG}" \
     -f sha="$TARGET_SHA" >/dev/null
@@ -284,15 +426,27 @@ verify_draft_release() {
   require_env RUNNER_TEMP
   require_env SOURCE_DIGEST
 
-  local assets_dir draft_release
+  local assets_dir draft_release draft_status
 
-  draft_release="$(load_draft_release "$RELEASE_TAG")" ||
-    die "Draft release ${RELEASE_TAG} was not found."
+  if draft_release="$(load_draft_release "$RELEASE_TAG")"; then
+    :
+  else
+    draft_status=$?
+    if ((draft_status == 1)); then
+      die "Draft release ${RELEASE_TAG} was not found."
+    fi
+    return "$draft_status"
+  fi
 
   assets_dir="${RUNNER_TEMP}/draft-release-assets"
+  assert_release_is_current "$RELEASE_TAG"
+  assert_tag_target "$RELEASE_TAG" "$SOURCE_DIGEST"
   download_draft_release_assets "$RELEASE_TAG" "$draft_release" "$assets_dir"
   verify_downloaded_asset_attestations \
     "Downloaded draft release ${RELEASE_TAG}" "$SOURCE_DIGEST" "$assets_dir"
+  assert_draft_release_unchanged "$RELEASE_TAG" "$draft_release"
+  assert_tag_target "$RELEASE_TAG" "$SOURCE_DIGEST"
+  assert_release_is_current "$RELEASE_TAG"
 }
 
 usage() {
