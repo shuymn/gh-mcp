@@ -239,8 +239,11 @@ stub_gh() {
           ;;
       esac
       ;;
-    draft-release-delayed | draft-release-partial-failure | draft-release-paginated | \
-      draft-release-tag-moves | draft-release-mutated | draft-release-higher-published)
+    draft-release-delayed | draft-release-missing | draft-release-ambiguous | \
+      draft-release-published | draft-release-partial-failure | \
+      draft-release-paginated | draft-release-tag-moves | \
+      draft-release-tag-ref-failure | draft-release-annotated-tag-failure | \
+      draft-release-mutated | draft-release-higher-published)
       case "$endpoint" in
         */releases\?per_page=100)
           if has_argument --jq "$@"; then
@@ -253,6 +256,7 @@ stub_gh() {
           fi
           lookup_count=0
           if [[ "${GH_STUB_SCENARIO:?}" == draft-release-delayed ||
+            "${GH_STUB_SCENARIO:?}" == draft-release-missing ||
             "${GH_STUB_SCENARIO:?}" == draft-release-partial-failure ]]; then
             lookup_count="$(read_and_increment_counter "${DRAFT_RELEASE_LOOKUP_COUNT_FILE:?}")"
           fi
@@ -262,6 +266,19 @@ stub_gh() {
                 printf '[]\n'
                 return 0
               fi
+              ;;
+            draft-release-missing)
+              printf '[]\n'
+              return 0
+              ;;
+            draft-release-ambiguous)
+              print_draft_release
+              print_draft_release
+              return 0
+              ;;
+            draft-release-published)
+              printf '[{"tag_name":"%s","draft":false}]\n' "${RELEASE_TAG:?}"
+              return 0
               ;;
             draft-release-partial-failure)
               if ((lookup_count == 0)); then
@@ -302,18 +319,34 @@ stub_gh() {
           return 0
           ;;
         */git/matching-refs/tags/*)
-          if [[ "${GH_STUB_SCENARIO:?}" == draft-release-tag-moves ]]; then
-            lookup_count=0
-            lookup_count="$(read_and_increment_counter "${TAG_TARGET_LOOKUP_COUNT_FILE:?}")"
-            if ((lookup_count == 0)); then
+          case "${GH_STUB_SCENARIO:?}" in
+            draft-release-tag-ref-failure)
+              return 7
+              ;;
+            draft-release-annotated-tag-failure)
+              printf 'tag\t%s\n' "${RELATED_SHA:?}"
+              return 0
+              ;;
+            draft-release-tag-moves)
+              lookup_count=0
+              lookup_count="$(read_and_increment_counter "${TAG_TARGET_LOOKUP_COUNT_FILE:?}")"
+              if ((lookup_count == 0)); then
+                printf 'commit\t%s\n' "${TARGET_SHA:?}"
+              else
+                printf 'commit\t%s\n' "${RELATED_SHA:?}"
+              fi
+              return 0
+              ;;
+            *)
               printf 'commit\t%s\n' "${TARGET_SHA:?}"
-            else
-              printf 'commit\t%s\n' "${RELATED_SHA:?}"
-            fi
-          else
-            printf 'commit\t%s\n' "${TARGET_SHA:?}"
-          fi
-          return 0
+              return 0
+              ;;
+          esac
+          ;;
+        */git/tags/*)
+          [[ "${GH_STUB_SCENARIO:?}" == draft-release-annotated-tag-failure ]] ||
+            fail "unexpected annotated tag lookup for ${GH_STUB_SCENARIO}: ${endpoint}"
+          return 7
           ;;
       esac
       ;;
@@ -611,6 +644,30 @@ test_release_verifies_paginated_draft() {
   echo "ok - release aggregates paginated draft releases"
 }
 
+test_release_rejects_tag_resolution_api_failures() {
+  local scenario stderr
+  local runner_temp="${TEST_ROOT}/tag-api-failure-runner"
+
+  mkdir -p "$runner_temp"
+  for scenario in draft-release-tag-ref-failure draft-release-annotated-tag-failure; do
+    stderr="${TEST_ROOT}/${scenario}-stderr"
+    if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+      GH_STUB_SCENARIO="$scenario" \
+      GITHUB_REPOSITORY=test/repository \
+      RELEASE_TAG="v${current_version}" \
+      RUNNER_TEMP="$runner_temp" \
+      SOURCE_DIGEST="$TARGET_SHA" \
+      "$RELEASE_SCRIPT" verify-draft \
+      >/dev/null 2>"$stderr"; then
+      fail "release verification ignored ${scenario}"
+    fi
+
+    assert_has_line "$stderr" \
+      "Failed to resolve tag v${current_version} before publishing."
+  done
+  echo "ok - release propagates tag resolution API failures"
+}
+
 test_release_rejects_moved_draft_tag() {
   local stderr="${TEST_ROOT}/moved-tag-stderr"
   local runner_temp="${TEST_ROOT}/moved-tag-runner"
@@ -719,6 +776,66 @@ test_release_rejects_newer_release_before_draft_publish() {
   echo "ok - release rejects a newer release before draft publication"
 }
 
+test_release_rejects_missing_draft_after_retries() {
+  local stderr="${TEST_ROOT}/missing-draft-stderr"
+  local runner_temp="${TEST_ROOT}/missing-draft-runner"
+  local lookup_count_log="${TEST_ROOT}/missing-draft-lookups"
+  local sleep_log="${TEST_ROOT}/missing-draft-sleeps"
+
+  mkdir -p "$runner_temp"
+  : >"$lookup_count_log"
+  : >"$sleep_log"
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=draft-release-missing \
+    DRAFT_RELEASE_LOOKUP_COUNT_FILE="$lookup_count_log" \
+    SLEEP_STUB_LOG="$sleep_log" \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_TAG="v${current_version}" \
+    RUNNER_TEMP="$runner_temp" \
+    SOURCE_DIGEST="$TARGET_SHA" \
+    "$RELEASE_SCRIPT" verify-draft \
+    >/dev/null 2>"$stderr"; then
+    fail "release verification accepted a missing draft after exhausting retries"
+  fi
+
+  assert_has_line "$stderr" \
+    "Draft release v${current_version} was not found."
+  assert_exact_output "$lookup_count_log" "5"
+  assert_exact_output "$sleep_log" "2" "2" "2" "2"
+  echo "ok - release stops after exhausting draft lookup retries"
+}
+
+test_release_rejects_terminal_draft_states() {
+  local expected scenario stderr
+  local runner_temp="${TEST_ROOT}/terminal-draft-state-runner"
+
+  mkdir -p "$runner_temp"
+  for scenario in draft-release-ambiguous draft-release-published; do
+    case "$scenario" in
+      draft-release-ambiguous)
+        expected="Multiple releases found for tag v${current_version}."
+        ;;
+      draft-release-published)
+        expected="Release v${current_version} is already published, not a draft."
+        ;;
+    esac
+    stderr="${TEST_ROOT}/${scenario}-stderr"
+    if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+      GH_STUB_SCENARIO="$scenario" \
+      GITHUB_REPOSITORY=test/repository \
+      RELEASE_TAG="v${current_version}" \
+      RUNNER_TEMP="$runner_temp" \
+      SOURCE_DIGEST="$TARGET_SHA" \
+      "$RELEASE_SCRIPT" verify-draft \
+      >/dev/null 2>"$stderr"; then
+      fail "release verification accepted ${scenario}"
+    fi
+
+    assert_has_line "$stderr" "$expected"
+  done
+  echo "ok - release rejects terminal non-draft lookup states"
+}
+
 test_release_rejects_invalid_draft_extraction() {
   local stderr="${TEST_ROOT}/invalid-draft-extraction-stderr"
   local runner_temp="${TEST_ROOT}/invalid-draft-extraction-runner"
@@ -776,9 +893,12 @@ test_release_resumes_same_target_unpublished_tag
 test_release_selects_higher_published_release
 test_release_verifies_draft_by_asset_id
 test_release_verifies_paginated_draft
+test_release_rejects_tag_resolution_api_failures
 test_release_rejects_moved_draft_tag
 test_release_rejects_changed_draft_release
 test_release_rejects_newer_release_before_tag_creation
 test_release_rejects_newer_release_before_draft_publish
+test_release_rejects_missing_draft_after_retries
+test_release_rejects_terminal_draft_states
 test_release_rejects_invalid_draft_extraction
 test_release_rejects_partial_release_list_failure

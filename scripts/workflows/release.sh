@@ -263,10 +263,14 @@ resolve_tag_target() {
   local tag=$1
   local tag_ref tag_type tag_object
 
-  tag_ref="$(
+  if tag_ref="$(
     gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/tags/${tag}" \
       --jq ".[] | select(.ref == \"refs/tags/${tag}\") | [.object.type, .object.sha] | @tsv"
-  )"
+  )"; then
+    :
+  else
+    return 1
+  fi
   if [[ -z "$tag_ref" ]]; then
     return 0
   fi
@@ -277,7 +281,11 @@ resolve_tag_target() {
       echo "$tag_object"
       ;;
     tag)
-      gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object}" --jq '.object.sha'
+      if gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object}" --jq '.object.sha'; then
+        :
+      else
+        return 1
+      fi
       ;;
     *)
       die "Unsupported tag object type for ${tag}: ${tag_type}"
