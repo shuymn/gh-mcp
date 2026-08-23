@@ -167,12 +167,13 @@ inspect_workflow_run() {
 wait_for_current_release() {
   [[ $# -eq 1 ]] || die "Usage: wait_for_current_release <current-release>"
   require_env GH_TOKEN
+  require_env GITHUB_REPOSITORY
 
   local current_release=$1
   # The preceding main CI and release jobs can take up to 110 minutes.
   local attempts=${RELEASE_WAIT_ATTEMPTS:-241}
   local wait_seconds=${RELEASE_WAIT_SECONDS:-30}
-  local current_release_tag published_tag attempt
+  local current_release_tag published_tag status attempt
 
   [[ "$current_release" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] ||
     die "Current release must be canonical major.minor.patch: ${current_release}"
@@ -185,10 +186,18 @@ wait_for_current_release() {
     if published_tag="$(
       gh api --method GET \
         "repos/${GITHUB_REPOSITORY}/releases/tags/${current_release_tag}" \
-        --jq 'select(.draft == false and .prerelease == false and .immutable == true) | .tag_name'
-    )" && [[ "$published_tag" == "$current_release_tag" ]]; then
-      echo "Verified current gh-mcp release is published: ${current_release_tag}."
-      return 0
+        --jq 'select(.draft == false and .prerelease == false and .immutable == true) | .tag_name' \
+        2>/dev/null
+    )"; then
+      if [[ "$published_tag" == "$current_release_tag" ]]; then
+        echo "Verified current gh-mcp release is published: ${current_release_tag}."
+        return 0
+      fi
+    else
+      status="$(jq -r '.status // empty' <<<"$published_tag")" ||
+        die "Failed to inspect current gh-mcp release ${current_release_tag}."
+      [[ "$status" == 404 ]] ||
+        die "Failed to inspect current gh-mcp release ${current_release_tag}: HTTP ${status:-unknown}."
     fi
     if ((attempt < attempts)); then
       echo "Waiting for current gh-mcp release ${current_release_tag} to be published."
@@ -224,10 +233,12 @@ merge_pr() {
     echo "PR #${LIVE_PR_NUMBER} is already closed; nothing to merge."
     return 0
   fi
-  if [[ "$LIVE_BASE_SHA" != "$expected_base_sha" || "$LIVE_HEAD_SHA" != "$expected_head_sha" ]]; then
-    echo "PR #${LIVE_PR_NUMBER} moved after canonical verification; skipping stale merge."
+  if [[ "$LIVE_HEAD_SHA" != "$expected_head_sha" ]]; then
+    echo "PR #${LIVE_PR_NUMBER} head moved after canonical verification; skipping stale merge."
     return 0
   fi
+  [[ "$LIVE_BASE_SHA" == "$expected_base_sha" ]] ||
+    die "PR #${LIVE_PR_NUMBER} base advanced after canonical verification; rerun CI against the current base."
 
   "${BASH_SOURCE[0]%/*}/validate-upstream-release-order.sh" \
     "$current_upstream" "$next_upstream"
