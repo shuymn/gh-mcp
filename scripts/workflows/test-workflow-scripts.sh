@@ -30,6 +30,7 @@ readonly -a EXPECTED_DRAFT_ASSET_IDS=(
   337
   419
 )
+readonly EXPECTED_SIGNER_WORKFLOW="shuymn/gh-mcp/.github/workflows/release.yml"
 
 fail() {
   echo "not ok - $*" >&2
@@ -37,26 +38,27 @@ fail() {
 }
 
 stub_git() {
-  local argument
-  local name_status=false
-  local no_renames=false
-  local nul_terminated=false
-
-  if [[ "${GIT_STUB_SCENARIO:-}" == scope-diff-failure && "${1:-}" == diff ]]; then
-    for argument in "$@"; do
-      case "$argument" in
-        --name-status) name_status=true ;;
-        --no-renames) no_renames=true ;;
-        -z) nul_terminated=true ;;
-      esac
-    done
-    if [[ "$name_status" == true && "$no_renames" == true && "$nul_terminated" == true ]]; then
-      printf '%s\0%s\0' M mcp_version.go
-      exit 42
-    fi
+  if [[ "${GIT_STUB_SCENARIO:-}" == scope-diff-failure &&
+    "${1:-}" == diff ]] &&
+    has_argument --name-status "$@" &&
+    has_argument --no-renames "$@" &&
+    has_argument -z "$@"; then
+    printf '%s\0%s\0' M mcp_version.go
+    exit 42
   fi
 
   exec "${REAL_GIT:?}" "$@"
+}
+
+stub_jq() {
+  if [[ "${JQ_STUB_SCENARIO:-}" == missing-draft-release &&
+    "${1:-}" == -cs ]]; then
+    cat >/dev/null
+    printf '{"status":"draft"}\n'
+    return 0
+  fi
+
+  exec "${REAL_JQ:?}" "$@"
 }
 
 find_api_endpoint() {
@@ -70,6 +72,28 @@ find_api_endpoint() {
   done
 
   return 1
+}
+
+has_argument() {
+  local expected=$1
+  shift
+  local argument
+
+  for argument in "$@"; do
+    [[ "$argument" == "$expected" ]] && return 0
+  done
+  return 1
+}
+
+read_and_increment_counter() {
+  local file=$1
+  local count=0
+
+  if [[ -s "$file" ]]; then
+    count="$(<"$file")"
+  fi
+  printf '%s\n' "$((count + 1))" >"$file"
+  printf '%s\n' "$count"
 }
 
 has_api_header() {
@@ -121,12 +145,39 @@ print_draft_release() {
   printf ']}]\n'
 }
 
+print_draft_release_object() {
+  print_draft_release | jq -c '.[0]'
+}
+
+print_mutated_draft_release_object() {
+  print_draft_release | jq -c '.[0] | .assets = .assets[:-1]'
+}
+
 stub_gh() {
+  local lookup_count
+
   if [[ "${1:-}" == attestation ]]; then
-    [[ "${GH_STUB_SCENARIO:?}" == draft-release ]] ||
-      fail "unexpected gh command: $*"
-    [[ "${2:-}" == verify && -s "${3:-}" ]] ||
+    case "${GH_STUB_SCENARIO:?}" in
+      draft-release-delayed | draft-release-paginated | draft-release-tag-moves | \
+        draft-release-mutated)
+        ;;
+      *)
+        fail "unexpected gh command: $*"
+        ;;
+    esac
+    [[ "$#" -eq 10 &&
+      "${2:-}" == verify &&
+      -s "${3:-}" &&
+      "${4:-}" == --repo &&
+      "${5:-}" == "${GITHUB_REPOSITORY:?}" &&
+      "${6:-}" == --signer-workflow &&
+      "${7:-}" == "$EXPECTED_SIGNER_WORKFLOW" &&
+      "${8:-}" == --source-digest &&
+      "${9:-}" == "${SOURCE_DIGEST:?}" &&
+      "${10:-}" == --deny-self-hosted-runners ]] ||
       fail "invalid attestation verification: $*"
+    printf '%s\t%s\t%s\t%s\t%s\n' \
+      "${3##*/}" "$5" "$7" "$9" "${10}" >>"${DRAFT_ATTESTATION_LOG:?}"
     return 0
   fi
   [[ "${1:-}" == api ]] || fail "unexpected gh command: $*"
@@ -134,6 +185,12 @@ stub_gh() {
   local endpoint
   local asset_id
   endpoint="$(find_api_endpoint "$@")" || fail "gh api endpoint is missing: $*"
+  case "$endpoint" in
+    */releases\?per_page=100)
+      has_argument --paginate "$@" ||
+        fail "release list request is missing --paginate"
+      ;;
+  esac
 
   case "${GH_STUB_SCENARIO:?}" in
     missing-release)
@@ -182,9 +239,64 @@ stub_gh() {
           ;;
       esac
       ;;
-    draft-release)
+    draft-release-delayed | draft-release-missing | draft-release-ambiguous | \
+      draft-release-published | draft-release-partial-failure | \
+      draft-release-paginated | draft-release-tag-moves | \
+      draft-release-tag-ref-failure | draft-release-annotated-tag-failure | \
+      draft-release-mutated | draft-release-higher-published)
       case "$endpoint" in
         */releases\?per_page=100)
+          if has_argument --jq "$@"; then
+            if [[ "${GH_STUB_SCENARIO:?}" == draft-release-higher-published ]]; then
+              printf 'v%s\tfalse\n' "${HIGHER_VERSION:?}"
+            else
+              printf '%s\ttrue\n' "${RELEASE_TAG:?}"
+            fi
+            return 0
+          fi
+          lookup_count=0
+          if [[ "${GH_STUB_SCENARIO:?}" == draft-release-delayed ||
+            "${GH_STUB_SCENARIO:?}" == draft-release-missing ||
+            "${GH_STUB_SCENARIO:?}" == draft-release-partial-failure ]]; then
+            lookup_count="$(read_and_increment_counter "${DRAFT_RELEASE_LOOKUP_COUNT_FILE:?}")"
+          fi
+          case "${GH_STUB_SCENARIO:?}" in
+            draft-release-delayed)
+              if ((lookup_count == 0)); then
+                printf '[]\n'
+                return 0
+              fi
+              ;;
+            draft-release-missing)
+              printf '[]\n'
+              return 0
+              ;;
+            draft-release-ambiguous)
+              print_draft_release
+              print_draft_release
+              return 0
+              ;;
+            draft-release-published)
+              printf '[{"tag_name":"%s","draft":false}]\n' "${RELEASE_TAG:?}"
+              return 0
+              ;;
+            draft-release-partial-failure)
+              if ((lookup_count == 0)); then
+                print_draft_release
+                return 7
+              fi
+              ;;
+            draft-release-paginated)
+              printf '[]\n'
+              print_draft_release
+              return 0
+              ;;
+            draft-release-higher-published)
+              printf '[{"tag_name":"v%s","draft":false}]\n' "${HIGHER_VERSION:?}"
+              print_draft_release
+              return 0
+              ;;
+          esac
           print_draft_release
           return 0
           ;;
@@ -195,14 +307,57 @@ stub_gh() {
           is_expected_draft_asset_id "$asset_id" ||
             fail "unexpected draft release asset ID: ${asset_id}"
           printf '%s\n' "$asset_id" >>"${DRAFT_ASSET_ID_LOG:?}"
-          printf 'asset data'
+          printf '%s\n' "$asset_id"
           return 0
+          ;;
+        */releases/[0-9]*)
+          if [[ "${GH_STUB_SCENARIO:?}" == draft-release-mutated ]]; then
+            print_mutated_draft_release_object
+          else
+            print_draft_release_object
+          fi
+          return 0
+          ;;
+        */git/matching-refs/tags/*)
+          case "${GH_STUB_SCENARIO:?}" in
+            draft-release-tag-ref-failure)
+              return 7
+              ;;
+            draft-release-annotated-tag-failure)
+              printf 'tag\t%s\n' "${RELATED_SHA:?}"
+              return 0
+              ;;
+            draft-release-tag-moves)
+              lookup_count=0
+              lookup_count="$(read_and_increment_counter "${TAG_TARGET_LOOKUP_COUNT_FILE:?}")"
+              if ((lookup_count == 0)); then
+                printf 'commit\t%s\n' "${TARGET_SHA:?}"
+              else
+                printf 'commit\t%s\n' "${RELATED_SHA:?}"
+              fi
+              return 0
+              ;;
+            *)
+              printf 'commit\t%s\n' "${TARGET_SHA:?}"
+              return 0
+              ;;
+          esac
+          ;;
+        */git/tags/*)
+          [[ "${GH_STUB_SCENARIO:?}" == draft-release-annotated-tag-failure ]] ||
+            fail "unexpected annotated tag lookup for ${GH_STUB_SCENARIO}: ${endpoint}"
+          return 7
           ;;
       esac
       ;;
   esac
 
   fail "unexpected gh api endpoint for ${GH_STUB_SCENARIO}: ${endpoint}"
+}
+
+stub_sleep() {
+  [[ "$#" -eq 1 && "$1" == 2 ]] || fail "unexpected sleep command: $*"
+  printf '%s\n' "$1" >>"${SLEEP_STUB_LOG:?}"
 }
 
 case "${0##*/}" in
@@ -214,12 +369,21 @@ case "${0##*/}" in
     stub_gh "$@"
     exit 0
     ;;
+  jq)
+    stub_jq "$@"
+    exit 0
+    ;;
+  sleep)
+    stub_sleep "$@"
+    exit 0
+    ;;
 esac
 
 readonly ORIGINAL_PATH="$PATH"
 REAL_GIT="$(command -v git)"
-readonly REAL_GIT
-export REAL_GIT
+REAL_JQ="$(command -v jq)"
+readonly REAL_GIT REAL_JQ
+export REAL_GIT REAL_JQ
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
@@ -234,6 +398,8 @@ readonly STUB_BIN="${TEST_ROOT}/bin"
 mkdir -p "$STUB_BIN"
 ln -s "${SCRIPT_DIR}/${BASH_SOURCE[0]##*/}" "${STUB_BIN}/gh"
 ln -s "${SCRIPT_DIR}/${BASH_SOURCE[0]##*/}" "${STUB_BIN}/git"
+ln -s "${SCRIPT_DIR}/${BASH_SOURCE[0]##*/}" "${STUB_BIN}/jq"
+ln -s "${SCRIPT_DIR}/${BASH_SOURCE[0]##*/}" "${STUB_BIN}/sleep"
 
 cleanup() {
   rm -rf -- "$TEST_ROOT"
@@ -270,6 +436,30 @@ assert_exact_output() {
 
   printf '%s\n' "$@" >"$expected"
   diff -u "$expected" "$actual" || fail "unexpected workflow output"
+}
+
+assert_draft_asset_payloads() {
+  local assets_dir=$1
+  local index
+
+  for ((index = 0; index < ${#EXPECTED_RELEASE_ASSETS[@]}; index++)); do
+    assert_exact_output \
+      "${assets_dir}/${EXPECTED_RELEASE_ASSETS[$index]}" \
+      "${EXPECTED_DRAFT_ASSET_IDS[$index]}"
+  done
+}
+
+assert_draft_attestations() {
+  local log=$1
+  local repository=$2
+  local digest=$3
+  local asset
+  local -a expected=()
+
+  for asset in "${EXPECTED_RELEASE_ASSETS[@]}"; do
+    expected+=("${asset}"$'\t'"${repository}"$'\t'"${EXPECTED_SIGNER_WORKFLOW}"$'\t'"${digest}"$'\t--deny-self-hosted-runners')
+  done
+  assert_exact_output "$log" "${expected[@]}"
 }
 
 fail_command() {
@@ -393,12 +583,21 @@ test_release_verifies_draft_by_asset_id() {
   local stderr="${TEST_ROOT}/draft-release-stderr"
   local runner_temp="${TEST_ROOT}/draft-release-runner"
   local asset_id_log="${TEST_ROOT}/draft-release-asset-ids"
+  local attestation_log="${TEST_ROOT}/draft-release-attestations"
+  local lookup_count_log="${TEST_ROOT}/draft-release-lookups"
+  local sleep_log="${TEST_ROOT}/draft-release-sleeps"
 
   mkdir -p "$runner_temp"
   : >"$asset_id_log"
+  : >"$attestation_log"
+  : >"$lookup_count_log"
+  : >"$sleep_log"
   if ! PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
-    GH_STUB_SCENARIO=draft-release \
+    GH_STUB_SCENARIO=draft-release-delayed \
     DRAFT_ASSET_ID_LOG="$asset_id_log" \
+    DRAFT_ATTESTATION_LOG="$attestation_log" \
+    DRAFT_RELEASE_LOOKUP_COUNT_FILE="$lookup_count_log" \
+    SLEEP_STUB_LOG="$sleep_log" \
     GITHUB_REPOSITORY=test/repository \
     RELEASE_TAG="v${current_version}" \
     RUNNER_TEMP="$runner_temp" \
@@ -410,7 +609,281 @@ test_release_verifies_draft_by_asset_id() {
 
   sort -n -o "$asset_id_log" "$asset_id_log"
   assert_exact_output "$asset_id_log" "${EXPECTED_DRAFT_ASSET_IDS[@]}"
-  echo "ok - release verifies a draft release by asset ID"
+  assert_draft_asset_payloads "${runner_temp}/draft-release-assets"
+  assert_draft_attestations "$attestation_log" test/repository "$TARGET_SHA"
+  assert_exact_output "$lookup_count_log" "2"
+  assert_exact_output "$sleep_log" "2"
+  echo "ok - release retries draft lookup and verifies assets and attestations"
+}
+
+test_release_verifies_paginated_draft() {
+  local stderr="${TEST_ROOT}/paginated-draft-stderr"
+  local runner_temp="${TEST_ROOT}/paginated-draft-runner"
+  local asset_id_log="${TEST_ROOT}/paginated-draft-asset-ids"
+  local attestation_log="${TEST_ROOT}/paginated-draft-attestations"
+
+  mkdir -p "$runner_temp"
+  : >"$asset_id_log"
+  : >"$attestation_log"
+  if ! PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=draft-release-paginated \
+    DRAFT_ASSET_ID_LOG="$asset_id_log" \
+    DRAFT_ATTESTATION_LOG="$attestation_log" \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_TAG="v${current_version}" \
+    RUNNER_TEMP="$runner_temp" \
+    SOURCE_DIGEST="$TARGET_SHA" \
+    "$RELEASE_SCRIPT" verify-draft \
+    >/dev/null 2>"$stderr"; then
+    fail_command "$stderr" "verifying a draft release from a later page"
+  fi
+
+  assert_exact_output "$asset_id_log" "${EXPECTED_DRAFT_ASSET_IDS[@]}"
+  assert_draft_asset_payloads "${runner_temp}/draft-release-assets"
+  assert_draft_attestations "$attestation_log" test/repository "$TARGET_SHA"
+  echo "ok - release aggregates paginated draft releases"
+}
+
+test_release_rejects_tag_resolution_api_failures() {
+  local scenario stderr
+  local runner_temp="${TEST_ROOT}/tag-api-failure-runner"
+
+  mkdir -p "$runner_temp"
+  for scenario in draft-release-tag-ref-failure draft-release-annotated-tag-failure; do
+    stderr="${TEST_ROOT}/${scenario}-stderr"
+    if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+      GH_STUB_SCENARIO="$scenario" \
+      GITHUB_REPOSITORY=test/repository \
+      RELEASE_TAG="v${current_version}" \
+      RUNNER_TEMP="$runner_temp" \
+      SOURCE_DIGEST="$TARGET_SHA" \
+      "$RELEASE_SCRIPT" verify-draft \
+      >/dev/null 2>"$stderr"; then
+      fail "release verification ignored ${scenario}"
+    fi
+
+    assert_has_line "$stderr" \
+      "Failed to resolve tag v${current_version} before publishing."
+  done
+  echo "ok - release propagates tag resolution API failures"
+}
+
+test_release_rejects_moved_draft_tag() {
+  local stderr="${TEST_ROOT}/moved-tag-stderr"
+  local runner_temp="${TEST_ROOT}/moved-tag-runner"
+  local asset_id_log="${TEST_ROOT}/moved-tag-asset-ids"
+  local attestation_log="${TEST_ROOT}/moved-tag-attestations"
+  local tag_lookup_count_log="${TEST_ROOT}/moved-tag-lookups"
+
+  mkdir -p "$runner_temp"
+  : >"$asset_id_log"
+  : >"$attestation_log"
+  : >"$tag_lookup_count_log"
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=draft-release-tag-moves \
+    DRAFT_ASSET_ID_LOG="$asset_id_log" \
+    DRAFT_ATTESTATION_LOG="$attestation_log" \
+    TAG_TARGET_LOOKUP_COUNT_FILE="$tag_lookup_count_log" \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_TAG="v${current_version}" \
+    RUNNER_TEMP="$runner_temp" \
+    SOURCE_DIGEST="$TARGET_SHA" \
+    "$RELEASE_SCRIPT" verify-draft \
+    >/dev/null 2>"$stderr"; then
+    fail "release verification accepted a tag moved during verification"
+  fi
+
+  assert_has_line "$stderr" \
+    "Tag v${current_version} resolves to ${RELATED_SHA}, expected ${TARGET_SHA}."
+  assert_exact_output "$tag_lookup_count_log" "2"
+  assert_exact_output "$asset_id_log" "${EXPECTED_DRAFT_ASSET_IDS[@]}"
+  assert_draft_attestations "$attestation_log" test/repository "$TARGET_SHA"
+  echo "ok - release rejects a tag moved after attestation"
+}
+
+test_release_rejects_changed_draft_release() {
+  local stderr="${TEST_ROOT}/changed-draft-stderr"
+  local runner_temp="${TEST_ROOT}/changed-draft-runner"
+  local asset_id_log="${TEST_ROOT}/changed-draft-asset-ids"
+  local attestation_log="${TEST_ROOT}/changed-draft-attestations"
+
+  mkdir -p "$runner_temp"
+  : >"$asset_id_log"
+  : >"$attestation_log"
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=draft-release-mutated \
+    DRAFT_ASSET_ID_LOG="$asset_id_log" \
+    DRAFT_ATTESTATION_LOG="$attestation_log" \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_TAG="v${current_version}" \
+    RUNNER_TEMP="$runner_temp" \
+    SOURCE_DIGEST="$TARGET_SHA" \
+    "$RELEASE_SCRIPT" verify-draft \
+    >/dev/null 2>"$stderr"; then
+    fail "release verification accepted a changed draft release"
+  fi
+
+  assert_has_line "$stderr" \
+    "Draft release v${current_version} changed while it was being verified."
+  assert_exact_output "$asset_id_log" "${EXPECTED_DRAFT_ASSET_IDS[@]}"
+  assert_draft_attestations "$attestation_log" test/repository "$TARGET_SHA"
+  echo "ok - release rejects a changed draft release"
+}
+
+test_release_rejects_newer_release_before_tag_creation() {
+  local stderr="${TEST_ROOT}/newer-release-tag-stderr"
+
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=higher-published-release \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_TAG="v${current_version}" \
+    "$RELEASE_SCRIPT" create-tag \
+    >/dev/null 2>"$stderr"; then
+    fail "release tag creation ignored a newer published release"
+  fi
+
+  assert_has_line "$stderr" \
+    "Release v${current_version} is superseded by published v${HIGHER_VERSION}."
+  echo "ok - release rejects a newer release before creating a tag"
+}
+
+test_release_rejects_newer_release_before_draft_publish() {
+  local stderr="${TEST_ROOT}/newer-release-draft-stderr"
+  local runner_temp="${TEST_ROOT}/newer-release-draft-runner"
+  local asset_id_log="${TEST_ROOT}/newer-release-draft-asset-ids"
+  local attestation_log="${TEST_ROOT}/newer-release-draft-attestations"
+
+  mkdir -p "$runner_temp"
+  : >"$asset_id_log"
+  : >"$attestation_log"
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=draft-release-higher-published \
+    DRAFT_ASSET_ID_LOG="$asset_id_log" \
+    DRAFT_ATTESTATION_LOG="$attestation_log" \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_TAG="v${current_version}" \
+    RUNNER_TEMP="$runner_temp" \
+    SOURCE_DIGEST="$TARGET_SHA" \
+    "$RELEASE_SCRIPT" verify-draft \
+    >/dev/null 2>"$stderr"; then
+    fail "draft publication ignored a newer published release"
+  fi
+
+  assert_has_line "$stderr" \
+    "Release v${current_version} is superseded by published v${HIGHER_VERSION}."
+  [[ ! -s "$asset_id_log" ]] || fail "draft assets were downloaded after a newer release appeared"
+  [[ ! -s "$attestation_log" ]] || fail "draft attestations ran after a newer release appeared"
+  echo "ok - release rejects a newer release before draft publication"
+}
+
+test_release_rejects_missing_draft_after_retries() {
+  local stderr="${TEST_ROOT}/missing-draft-stderr"
+  local runner_temp="${TEST_ROOT}/missing-draft-runner"
+  local lookup_count_log="${TEST_ROOT}/missing-draft-lookups"
+  local sleep_log="${TEST_ROOT}/missing-draft-sleeps"
+
+  mkdir -p "$runner_temp"
+  : >"$lookup_count_log"
+  : >"$sleep_log"
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=draft-release-missing \
+    DRAFT_RELEASE_LOOKUP_COUNT_FILE="$lookup_count_log" \
+    SLEEP_STUB_LOG="$sleep_log" \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_TAG="v${current_version}" \
+    RUNNER_TEMP="$runner_temp" \
+    SOURCE_DIGEST="$TARGET_SHA" \
+    "$RELEASE_SCRIPT" verify-draft \
+    >/dev/null 2>"$stderr"; then
+    fail "release verification accepted a missing draft after exhausting retries"
+  fi
+
+  assert_has_line "$stderr" \
+    "Draft release v${current_version} was not found."
+  assert_exact_output "$lookup_count_log" "5"
+  assert_exact_output "$sleep_log" "2" "2" "2" "2"
+  echo "ok - release stops after exhausting draft lookup retries"
+}
+
+test_release_rejects_terminal_draft_states() {
+  local expected scenario stderr
+  local runner_temp="${TEST_ROOT}/terminal-draft-state-runner"
+
+  mkdir -p "$runner_temp"
+  for scenario in draft-release-ambiguous draft-release-published; do
+    case "$scenario" in
+      draft-release-ambiguous)
+        expected="Multiple releases found for tag v${current_version}."
+        ;;
+      draft-release-published)
+        expected="Release v${current_version} is already published, not a draft."
+        ;;
+    esac
+    stderr="${TEST_ROOT}/${scenario}-stderr"
+    if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+      GH_STUB_SCENARIO="$scenario" \
+      GITHUB_REPOSITORY=test/repository \
+      RELEASE_TAG="v${current_version}" \
+      RUNNER_TEMP="$runner_temp" \
+      SOURCE_DIGEST="$TARGET_SHA" \
+      "$RELEASE_SCRIPT" verify-draft \
+      >/dev/null 2>"$stderr"; then
+      fail "release verification accepted ${scenario}"
+    fi
+
+    assert_has_line "$stderr" "$expected"
+  done
+  echo "ok - release rejects terminal non-draft lookup states"
+}
+
+test_release_rejects_invalid_draft_extraction() {
+  local stderr="${TEST_ROOT}/invalid-draft-extraction-stderr"
+  local runner_temp="${TEST_ROOT}/invalid-draft-extraction-runner"
+
+  mkdir -p "$runner_temp"
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=draft-release-paginated \
+    JQ_STUB_SCENARIO=missing-draft-release \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_TAG="v${current_version}" \
+    RUNNER_TEMP="$runner_temp" \
+    SOURCE_DIGEST="$TARGET_SHA" \
+    "$RELEASE_SCRIPT" verify-draft \
+    >/dev/null 2>"$stderr"; then
+    fail "release verification accepted an invalid draft extraction"
+  fi
+
+  assert_has_line "$stderr" \
+    "Failed to extract draft release v${current_version}."
+  echo "ok - release rejects an invalid draft extraction"
+}
+
+test_release_rejects_partial_release_list_failure() {
+  local stderr="${TEST_ROOT}/partial-release-stderr"
+  local runner_temp="${TEST_ROOT}/partial-release-runner"
+  local lookup_count_log="${TEST_ROOT}/partial-release-lookups"
+
+  mkdir -p "$runner_temp"
+  : >"$lookup_count_log"
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=draft-release-partial-failure \
+    DRAFT_RELEASE_LOOKUP_COUNT_FILE="$lookup_count_log" \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_TAG="v${current_version}" \
+    RUNNER_TEMP="$runner_temp" \
+    SOURCE_DIGEST="$TARGET_SHA" \
+    "$RELEASE_SCRIPT" verify-draft \
+    >/dev/null 2>"$stderr"; then
+    fail "release verification accepted a partial release list failure"
+  fi
+
+  assert_has_line "$stderr" \
+    "Failed to list releases while looking for draft v${current_version} (gh api exited with status 7)."
+  if grep -Fq -- "retrying" "$stderr"; then
+    fail "release verification retried a failed release list request"
+  fi
+  assert_exact_output "$lookup_count_log" "1"
+  echo "ok - release discards partial failed lookup output without retrying"
 }
 
 test_prepare_rejects_failed_scope_inspection
@@ -419,3 +892,13 @@ test_release_rejects_related_unpublished_tag
 test_release_resumes_same_target_unpublished_tag
 test_release_selects_higher_published_release
 test_release_verifies_draft_by_asset_id
+test_release_verifies_paginated_draft
+test_release_rejects_tag_resolution_api_failures
+test_release_rejects_moved_draft_tag
+test_release_rejects_changed_draft_release
+test_release_rejects_newer_release_before_tag_creation
+test_release_rejects_newer_release_before_draft_publish
+test_release_rejects_missing_draft_after_retries
+test_release_rejects_terminal_draft_states
+test_release_rejects_invalid_draft_extraction
+test_release_rejects_partial_release_list_failure
