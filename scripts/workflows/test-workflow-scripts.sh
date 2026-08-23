@@ -233,7 +233,7 @@ stub_gh() {
           return 0
           ;;
         */releases/tags/*)
-          printf 'true\n'
+          printf '%s\n' "${PUBLISHED_RELEASE_IMMUTABLE:-true}"
           print_reordered_release_assets
           return 0
           ;;
@@ -556,6 +556,8 @@ test_release_resumes_same_target_unpublished_tag() {
 }
 
 test_release_selects_higher_published_release() {
+  local invalid_output="${TEST_ROOT}/mutable-release-output"
+  local invalid_stderr="${TEST_ROOT}/mutable-release-stderr"
   local output="${TEST_ROOT}/published-release-output"
   local stderr="${TEST_ROOT}/published-release-stderr"
 
@@ -576,7 +578,23 @@ test_release_selects_higher_published_release() {
     "publish=false" \
     "tag=v${HIGHER_VERSION}" \
     "tag_target=${TARGET_SHA}"
-  echo "ok - release select accepts reordered assets for a higher immutable release"
+
+  : >"$invalid_output"
+  if (
+    cd "$REPO_ROOT"
+    PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+      GH_STUB_SCENARIO=higher-published-release \
+      PUBLISHED_RELEASE_IMMUTABLE=false \
+      GITHUB_OUTPUT="$invalid_output" \
+      GITHUB_REPOSITORY=test/repository \
+      "$RELEASE_SCRIPT" select
+  ) >/dev/null 2>"$invalid_stderr"; then
+    fail "release select accepted a mutable higher release"
+  fi
+
+  assert_has_line "$invalid_stderr" \
+    "Published release v${HIGHER_VERSION} is not immutable."
+  echo "ok - release select validates higher published release metadata"
 }
 
 test_release_verifies_draft_by_asset_id() {

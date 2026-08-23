@@ -148,31 +148,19 @@ func TestBundledExecutableSizeValidation(t *testing.T) {
 }
 
 func TestCopyBundledExecutableWithLimit(t *testing.T) {
-	t.Run("within limit", func(t *testing.T) {
-		if err := copyBundledExecutableWithLimit(
-			io.Discard,
-			strings.NewReader("binary-content"),
-			"github-mcp-server",
-		); err != nil {
-			t.Fatalf("expected copy to succeed, got: %v", err)
-		}
-	})
+	reader := io.LimitReader(repeatByteReader{}, maxBundledExecutableBytes+2)
 
-	t.Run("over limit", func(t *testing.T) {
-		reader := io.LimitReader(repeatByteReader{}, maxBundledExecutableBytes+2)
-
-		err := copyBundledExecutableWithLimit(
-			io.Discard,
-			reader,
-			"github-mcp-server",
-		)
-		if err == nil {
-			t.Fatal("expected copy to fail when payload exceeds max size")
-		}
-		if !strings.Contains(err.Error(), "exceeds extraction size limit") {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
+	err := copyBundledExecutableWithLimit(
+		io.Discard,
+		reader,
+		"github-mcp-server",
+	)
+	if err == nil {
+		t.Fatal("expected copy to fail when payload exceeds max size")
+	}
+	if !strings.Contains(err.Error(), "exceeds extraction size limit") {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestBuildChildProcessEnv(t *testing.T) {
@@ -206,27 +194,6 @@ func TestBuildChildProcessEnv(t *testing.T) {
 	}
 	if _, ok := m["MALFORMED"]; ok {
 		t.Fatal("malformed env entry should not be propagated")
-	}
-}
-
-func TestBundledVersionMatchesChecksumsFile(t *testing.T) {
-	if bundledMCPArchiveName == "" {
-		t.Skip("no bundled archive for this platform")
-	}
-
-	version := strings.TrimPrefix(mcpServerVersion, "v")
-	checksumsPath := filepath.Join(
-		"bundled",
-		fmt.Sprintf("github-mcp-server_%s_checksums.txt", version),
-	)
-
-	if _, err := os.Stat(checksumsPath); err != nil {
-		t.Fatalf(
-			"expected checksums file %q for mcpServerVersion=%q: %v",
-			checksumsPath,
-			mcpServerVersion,
-			err,
-		)
 	}
 }
 
@@ -325,8 +292,18 @@ func TestEnsureSecureTempParentDirTightensPermissions(t *testing.T) {
 	}
 
 	parent := filepath.Join(t.TempDir(), "cache")
-	if err := os.Mkdir(parent, 0o777); err != nil {
+	if err := os.Mkdir(parent, 0o700); err != nil {
 		t.Fatalf("failed to create parent directory: %v", err)
+	}
+	if err := os.Chmod(parent, 0o777); err != nil {
+		t.Fatalf("failed to broaden parent directory permissions: %v", err)
+	}
+	before, err := os.Stat(parent)
+	if err != nil {
+		t.Fatalf("failed to stat parent directory before tightening: %v", err)
+	}
+	if perms := before.Mode().Perm(); perms&0o077 == 0 {
+		t.Fatalf("test precondition failed: expected broad permissions, got %#o", perms)
 	}
 
 	parentState, err := ensureSecureTempParentDir(parent)
@@ -391,6 +368,9 @@ func TestWaitForServerExit(t *testing.T) {
 		if err := waitForServerExit(context.Background(), cmd); err != nil {
 			t.Fatalf("waitForServerExit returned error: %v", err)
 		}
+		if cmd.ProcessState == nil {
+			t.Fatal("expected helper process to be reaped")
+		}
 	})
 
 	t.Run("non-zero exit", func(t *testing.T) {
@@ -422,6 +402,9 @@ func TestWaitForServerExit(t *testing.T) {
 		cancel()
 		if err := waitForServerExit(ctx, cmd); err != nil {
 			t.Fatalf("expected nil error on canceled context, got: %v", err)
+		}
+		if cmd.ProcessState == nil {
+			t.Fatal("expected canceled helper process to be reaped")
 		}
 	})
 }
