@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+
 : "${BASE_SHA:?BASE_SHA must be set}"
 
 if [[ "${BASE_SHA}" =~ ^0+$ ]]; then
@@ -22,3 +25,9 @@ go run ./scripts/release-version validate \
   "${next_release}" \
   "${current_upstream}" \
   "${next_upstream}"
+
+if [[ "${current_upstream}" != "${next_upstream}" ]]; then
+  "${SCRIPT_DIR}/validate-upstream-release-order.sh" \
+    "${current_upstream}" \
+    "${next_upstream}"
+fi

@@ -146,16 +146,23 @@ The project consists of three main components:
 
 Stable `github-mcp-server` updates are released through an automated pipeline:
 
-1. After a one-day stabilization window, Renovate opens one update PR for
-   `mcp_version.go`.
-2. `Prepare upstream release` verifies the upstream attestations and checksums, updates
-   `VERSION` and the pinned archive hashes in one commit, and pushes it to the PR.
-3. After required CI passes, the trusted post-CI workflow checks the current PR identity,
-   exact base/head, and canonical metadata again before merging patch and minor updates.
-   Major updates remain open for compatibility review.
+1. After a one-day stabilization window, Renovate opens a version-specific update PR for
+   `mcp_version.go`. Candidates are capped at the next patch, the next minor's `.0`, and the
+   next major's `.0`, and available major/minor streams are separated from patch updates.
+2. `Prepare upstream release` verifies that the candidate is the earliest unbundled stable
+   upstream release, verifies its attestations and checksums, updates `VERSION` and the pinned
+   archive hashes in one commit, and pushes it to the PR.
+3. Required CI and the trusted post-CI workflow both enforce upstream release order. The
+   post-CI workflow waits for the current gh-mcp release to be published, then checks the
+   current PR identity, exact base/head, and canonical metadata again before merging patch and
+   minor updates. Major updates remain open for compatibility review.
 4. After the merge commit passes CI on `main`, `Release` creates the version tag, builds
    all extension artifacts, generates build-provenance attestations, and publishes the
    GitHub release.
+
+The Renovate candidate cap assumes each upstream version component advances without gaps.
+If upstream intentionally skips a patch, minor, or major number, adjust the cap before
+processing that release; the release-history check remains the final no-skip authority.
 
 Release jobs are serialized. If CI completion order is inverted, an older candidate
 verifies the newer immutable release and exits instead of publishing versions backward.

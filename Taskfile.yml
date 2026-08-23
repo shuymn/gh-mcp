@@ -132,6 +132,7 @@ tasks:
         msg: "Bash 4.1 or later must be first on PATH."
     cmds:
       - ./scripts/workflows/test-merge-upstream-release.sh
+      - ./scripts/workflows/test-validate-upstream-release-order.sh
       - ./scripts/workflows/test-workflow-scripts.sh
 
   lint:

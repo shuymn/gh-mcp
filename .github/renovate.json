@@ -42,6 +42,16 @@
   ],
   "packageRules": [
     {
+      "description": "Keep observed github-mcp-server releases on distinct branches",
+      "matchDatasources": ["github-releases"],
+      "matchPackageNames": ["github/github-mcp-server"],
+      "allowedVersions": "<=v{{major}}.{{minor}}.{{add patch 1}} || v{{major}}.{{add minor 1}}.0 || v{{add major 1}}.0.0",
+      "separateMultipleMajor": true,
+      "separateMultipleMinor": true,
+      "separateMinorPatch": true,
+      "branchTopic": "{{{depNameSanitized}}}-{{{newVersion}}}"
+    },
+    {
       "matchPackageNames": ["!github/github-mcp-server"],
       "matchUpdateTypes": ["minor", "patch"],
       "matchCurrentVersion": ">=1.0.0",

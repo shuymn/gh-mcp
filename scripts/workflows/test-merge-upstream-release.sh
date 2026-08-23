@@ -50,6 +50,7 @@ stub_gh() {
 
   local argument
   local endpoint
+  local jq_filter=""
   local method=GET
   local previous=""
   local saw_head_sha=false
@@ -59,11 +60,18 @@ stub_gh() {
     if [[ "$previous" == --method ]]; then
       method=$argument
     fi
+    if [[ "$previous" == --jq ]]; then
+      jq_filter=$argument
+    fi
     [[ "$argument" == "sha=${TARGET_SHA:-}" ]] && saw_head_sha=true
     [[ "$argument" == merge_method=merge ]] && saw_merge_method=true
     previous=$argument
   done
   endpoint="$(find_api_endpoint "$@")" || fail "gh api endpoint is missing: $*"
+  if [[ "$endpoint" == repos/test/repository/releases/tags/* ]]; then
+    [[ "$jq_filter" == 'select(.draft == false and .prerelease == false and .immutable == true) | .tag_name' ]] ||
+      fail "release lookup omitted the stable immutable filter"
+  fi
 
   case "${GH_STUB_SCENARIO:?}" in
     identity-mismatch)
@@ -101,6 +109,13 @@ stub_gh() {
         GET:*/compare/${BASE_SHA}...${TARGET_SHA})
           printf 'ahead\n'
           ;;
+        GET:repos/test/repository/releases/tags/v"${CURRENT_RELEASE}")
+          printf 'v%s\n' "$CURRENT_RELEASE"
+          ;;
+        GET:repos/github/github-mcp-server/releases\?per_page=100)
+          [[ "$GH_TOKEN" == read-token ]] || fail "release lookup did not use the read token"
+          printf '%s\n' "$NEXT_UPSTREAM" "$CURRENT_UPSTREAM"
+          ;;
         PUT:*/pulls/42/merge)
           [[ "$GH_TOKEN" == merge-token ]] || fail "merge request did not use the App token"
           [[ "$saw_head_sha" == true ]] || fail "merge request omitted exact head SHA"
@@ -108,6 +123,147 @@ stub_gh() {
           printf '{"merged":true,"sha":"%s","message":"merged"}\n' "$MERGE_SHA"
           ;;
         *) fail "unexpected merge endpoint: ${method}:${endpoint}" ;;
+      esac
+      ;;
+    merge-out-of-order)
+      case "${method}:${endpoint}" in
+        GET:*/pulls/42)
+          print_pr renovate[bot]
+          ;;
+        GET:repos/test/repository/releases/tags/v"${CURRENT_RELEASE}")
+          fail "out-of-order PR waited for the current release"
+          ;;
+        GET:repos/github/github-mcp-server/releases\?per_page=100)
+          printf '%s\n' "$LATER_UPSTREAM" "$NEXT_UPSTREAM" "$CURRENT_UPSTREAM"
+          ;;
+        PUT:*/pulls/42/merge)
+          fail "out-of-order PR reached the merge endpoint"
+          ;;
+        *) fail "unexpected out-of-order endpoint: ${method}:${endpoint}" ;;
+      esac
+      ;;
+    merge-missing-current-release)
+      case "${method}:${endpoint}" in
+        GET:*/pulls/42)
+          print_pr renovate[bot]
+          ;;
+        GET:repos/test/repository/releases/tags/v"${CURRENT_RELEASE}")
+          printf '{"status":"404"}\n'
+          return 1
+          ;;
+        GET:repos/github/github-mcp-server/releases\?per_page=100)
+          printf '%s\n' "$NEXT_UPSTREAM" "$CURRENT_UPSTREAM"
+          ;;
+        PUT:*/pulls/42/merge)
+          fail "PR with an unpublished current release reached the merge endpoint"
+          ;;
+        *) fail "unexpected missing-current-release endpoint: ${method}:${endpoint}" ;;
+      esac
+      ;;
+    merge-partial-current-release)
+      case "${method}:${endpoint}" in
+        GET:*/pulls/42)
+          print_pr renovate[bot]
+          ;;
+        GET:repos/test/repository/releases/tags/v"${CURRENT_RELEASE}")
+          printf 'v%s\n' "$CURRENT_RELEASE"
+          return 42
+          ;;
+        GET:repos/github/github-mcp-server/releases\?per_page=100)
+          printf '%s\n' "$NEXT_UPSTREAM" "$CURRENT_UPSTREAM"
+          ;;
+        PUT:*/pulls/42/merge)
+          fail "partial current release response reached the merge endpoint"
+          ;;
+        *) fail "unexpected partial-current-release endpoint: ${method}:${endpoint}" ;;
+      esac
+      ;;
+    merge-waits-current-release)
+      case "${method}:${endpoint}" in
+        GET:*/pulls/42)
+          print_pr renovate[bot]
+          ;;
+        GET:repos/test/repository/releases/tags/v"${CURRENT_RELEASE}")
+          : "${GH_STUB_COUNT_FILE:?}"
+          printf 'attempt\n' >>"$GH_STUB_COUNT_FILE"
+          if [[ "$(wc -l <"$GH_STUB_COUNT_FILE")" -eq 1 ]]; then
+            printf '{"status":"404"}\n'
+            return 1
+          fi
+          printf 'v%s\n' "$CURRENT_RELEASE"
+          ;;
+        GET:repos/github/github-mcp-server/releases\?per_page=100)
+          printf '%s\n' "$NEXT_UPSTREAM" "$CURRENT_UPSTREAM"
+          ;;
+        PUT:*/pulls/42/merge)
+          printf '{"merged":true,"sha":"%s","message":"merged"}\n' "$MERGE_SHA"
+          ;;
+        *) fail "unexpected wait-current-release endpoint: ${method}:${endpoint}" ;;
+      esac
+      ;;
+    merge-release-api-error)
+      case "${method}:${endpoint}" in
+        GET:*/pulls/42)
+          print_pr renovate[bot]
+          ;;
+        GET:repos/test/repository/releases/tags/v"${CURRENT_RELEASE}")
+          : "${GH_STUB_HTTP_STATUS:?}"
+          printf '{"status":"%s"}\n' "$GH_STUB_HTTP_STATUS"
+          return 1
+          ;;
+        GET:repos/github/github-mcp-server/releases\?per_page=100)
+          printf '%s\n' "$NEXT_UPSTREAM" "$CURRENT_UPSTREAM"
+          ;;
+        PUT:*/pulls/42/merge)
+          fail "release API failure reached the merge endpoint"
+          ;;
+        *) fail "unexpected release-api-error endpoint: ${method}:${endpoint}" ;;
+      esac
+      ;;
+    merge-base-advances-during-wait)
+      case "${method}:${endpoint}" in
+        GET:*/pulls/42)
+          : "${GH_STUB_COUNT_FILE:?}"
+          printf 'pull\n' >>"$GH_STUB_COUNT_FILE"
+          if [[ "$(wc -l <"$GH_STUB_COUNT_FILE")" -eq 1 ]]; then
+            print_pr renovate[bot]
+          else
+            print_pr renovate[bot] open "$TARGET_SHA" "$TARGET_SHA"
+          fi
+          ;;
+        GET:repos/test/repository/releases/tags/v"${CURRENT_RELEASE}")
+          printf 'v%s\n' "$CURRENT_RELEASE"
+          ;;
+        GET:repos/github/github-mcp-server/releases\?per_page=100)
+          printf '%s\n' "$NEXT_UPSTREAM" "$CURRENT_UPSTREAM"
+          ;;
+        PUT:*/pulls/42/merge)
+          fail "PR that moved during the release wait reached the merge endpoint"
+          ;;
+        *) fail "unexpected base-advance-during-wait endpoint: ${method}:${endpoint}" ;;
+      esac
+      ;;
+    merge-head-moves-during-wait)
+      case "${method}:${endpoint}" in
+        GET:*/pulls/42)
+          : "${GH_STUB_COUNT_FILE:?}"
+          printf 'pull\n' >>"$GH_STUB_COUNT_FILE"
+          if [[ "$(wc -l <"$GH_STUB_COUNT_FILE")" -eq 1 ]]; then
+            print_pr renovate[bot]
+          else
+            print_pr renovate[bot] open "$MOVED_HEAD_SHA"
+          fi
+          ;;
+        GET:repos/test/repository/releases/tags/v"${CURRENT_RELEASE}")
+          printf 'v%s\n' "$CURRENT_RELEASE"
+          ;;
+        GET:repos/github/github-mcp-server/releases\?per_page=100)
+          printf '%s\n' "$NEXT_UPSTREAM" "$CURRENT_UPSTREAM"
+          ;;
+        PUT:*/pulls/42/merge)
+          fail "PR whose head moved during the release wait reached the merge endpoint"
+          ;;
+        *) fail "unexpected head-move-during-wait endpoint: ${method}:${endpoint}" ;;
       esac
       ;;
     *) fail "unexpected gh scenario: ${GH_STUB_SCENARIO}" ;;
@@ -138,10 +294,16 @@ cleanup() {
 trap cleanup EXIT
 
 readonly BASE_SHA="2222222222222222222222222222222222222222"
+readonly CURRENT_RELEASE="3.9.0"
+readonly CURRENT_UPSTREAM="v1.10.0"
 readonly HEAD_REF="renovate/github-github-mcp-server-1.x"
+readonly LATER_UPSTREAM="v1.10.2"
 readonly MERGE_SHA="1111111111111111111111111111111111111111"
+readonly MOVED_HEAD_SHA="4444444444444444444444444444444444444444"
+readonly NEXT_UPSTREAM="v1.10.1"
 readonly TARGET_SHA="3333333333333333333333333333333333333333"
-export BASE_SHA HEAD_REF MERGE_SHA TARGET_SHA
+export BASE_SHA CURRENT_RELEASE CURRENT_UPSTREAM HEAD_REF LATER_UPSTREAM MERGE_SHA MOVED_HEAD_SHA
+export NEXT_UPSTREAM TARGET_SHA
 
 assert_has_line() {
   local file=$1
@@ -353,24 +515,203 @@ test_uses_exact_head_sha() {
     GH_TOKEN=read-token \
     MERGE_TOKEN=merge-token \
     GITHUB_REPOSITORY=test/repository \
-    "$MERGE_SCRIPT" merge 42 "$BASE_SHA" "$TARGET_SHA" >"$stdout"
+    RELEASE_WAIT_ATTEMPTS=1 \
+    "$MERGE_SCRIPT" merge 42 "$BASE_SHA" "$TARGET_SHA" \
+    "$CURRENT_RELEASE" "$CURRENT_UPSTREAM" "$NEXT_UPSTREAM" >"$stdout"
 
   assert_has_line "$stdout" "Merged PR #42 as ${MERGE_SHA}."
   echo "ok - merge uses the exact validated head SHA"
 }
 
-test_skips_stale_base() {
-  local stdout="${TEST_ROOT}/stale-base-stdout"
+test_rejects_stale_base() {
+  local stderr="${TEST_ROOT}/stale-base-stderr"
 
-  PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
     GH_STUB_SCENARIO=base-mismatch \
     GH_TOKEN=read-token \
     MERGE_TOKEN=merge-token \
     GITHUB_REPOSITORY=test/repository \
-    "$MERGE_SCRIPT" merge 42 "$BASE_SHA" "$TARGET_SHA" >"$stdout"
+    "$MERGE_SCRIPT" merge 42 "$BASE_SHA" "$TARGET_SHA" \
+    "$CURRENT_RELEASE" "$CURRENT_UPSTREAM" "$NEXT_UPSTREAM" >/dev/null 2>"$stderr"; then
+    fail "merge accepted a base advance after canonical verification"
+  fi
 
-  assert_has_line "$stdout" "PR #42 moved after canonical verification; skipping stale merge."
-  echo "ok - merge skips a stale base"
+  assert_has_line "$stderr" \
+    "PR #42 base advanced after canonical verification; rerun CI against the current base."
+  echo "ok - merge rejects a base advance after canonical verification"
+}
+
+test_rejects_out_of_order_release() {
+  local stderr="${TEST_ROOT}/out-of-order-stderr"
+
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=merge-out-of-order \
+    GH_TOKEN=read-token \
+    MERGE_TOKEN=merge-token \
+    GITHUB_REPOSITORY=test/repository \
+    "$MERGE_SCRIPT" merge 42 "$BASE_SHA" "$TARGET_SHA" \
+    "$CURRENT_RELEASE" "$CURRENT_UPSTREAM" "$LATER_UPSTREAM" >/dev/null 2>"$stderr"; then
+    fail "merge accepted an out-of-order upstream release"
+  fi
+
+  assert_has_line "$stderr" \
+    'earlier upstream release must be applied first: "v1.10.1" precedes "v1.10.2"'
+  echo "ok - merge rejects an out-of-order upstream release"
+}
+
+test_rejects_unpublished_current_release() {
+  local stderr="${TEST_ROOT}/unpublished-current-release-stderr"
+
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=merge-missing-current-release \
+    GH_TOKEN=read-token \
+    MERGE_TOKEN=merge-token \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_WAIT_ATTEMPTS=1 \
+    "$MERGE_SCRIPT" merge 42 "$BASE_SHA" "$TARGET_SHA" \
+    "$CURRENT_RELEASE" "$CURRENT_UPSTREAM" "$NEXT_UPSTREAM" >/dev/null 2>"$stderr"; then
+    fail "merge accepted an unpublished current gh-mcp release"
+  fi
+
+  assert_has_line "$stderr" "Current gh-mcp release is not published: v${CURRENT_RELEASE}"
+  echo "ok - merge rejects an unpublished current gh-mcp release"
+}
+
+test_rejects_partial_current_release_response() {
+  local stderr="${TEST_ROOT}/partial-current-release-stderr"
+
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=merge-partial-current-release \
+    GH_TOKEN=read-token \
+    MERGE_TOKEN=merge-token \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_WAIT_ATTEMPTS=1 \
+    "$MERGE_SCRIPT" merge 42 "$BASE_SHA" "$TARGET_SHA" \
+    "$CURRENT_RELEASE" "$CURRENT_UPSTREAM" "$NEXT_UPSTREAM" >/dev/null 2>"$stderr"; then
+    fail "merge accepted a partial current release API response"
+  fi
+
+  assert_has_line "$stderr" "Failed to inspect current gh-mcp release v${CURRENT_RELEASE}."
+  echo "ok - merge rejects a partial current release API response"
+}
+
+test_rejects_release_api_errors() {
+  local status stderr
+
+  for status in 401 403; do
+    stderr="${TEST_ROOT}/release-api-${status}-stderr"
+    if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+      GH_STUB_SCENARIO=merge-release-api-error \
+      GH_STUB_HTTP_STATUS="$status" \
+      GH_TOKEN=read-token \
+      MERGE_TOKEN=merge-token \
+      GITHUB_REPOSITORY=test/repository \
+      RELEASE_WAIT_ATTEMPTS=2 \
+      RELEASE_WAIT_SECONDS=0 \
+      "$MERGE_SCRIPT" merge 42 "$BASE_SHA" "$TARGET_SHA" \
+      "$CURRENT_RELEASE" "$CURRENT_UPSTREAM" "$NEXT_UPSTREAM" >/dev/null 2>"$stderr"; then
+      fail "merge retried an HTTP ${status} release API failure"
+    fi
+
+    assert_has_line "$stderr" \
+      "Failed to inspect current gh-mcp release v${CURRENT_RELEASE}: HTTP ${status}."
+  done
+  echo "ok - merge rejects release API authentication and permission errors"
+}
+
+test_waits_for_current_release() {
+  local count_file="${TEST_ROOT}/release-attempts"
+  local stdout="${TEST_ROOT}/wait-current-release-stdout"
+
+  : >"$count_file"
+  PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=merge-waits-current-release \
+    GH_STUB_COUNT_FILE="$count_file" \
+    GH_TOKEN=read-token \
+    MERGE_TOKEN=merge-token \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_WAIT_ATTEMPTS=2 \
+    RELEASE_WAIT_SECONDS=0 \
+    "$MERGE_SCRIPT" merge 42 "$BASE_SHA" "$TARGET_SHA" \
+    "$CURRENT_RELEASE" "$CURRENT_UPSTREAM" "$NEXT_UPSTREAM" >"$stdout"
+
+  [[ "$(wc -l <"$count_file")" -eq 2 ]] || fail "merge did not retry current release lookup"
+  assert_has_line "$stdout" \
+    "Waiting for current gh-mcp release v${CURRENT_RELEASE} to be published."
+  assert_has_line "$stdout" "Merged PR #42 as ${MERGE_SHA}."
+  echo "ok - merge waits for the current gh-mcp release"
+}
+
+test_wait_command_uses_read_token() {
+  local stdout="${TEST_ROOT}/wait-command-stdout"
+
+  PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=merge-success \
+    GH_TOKEN=read-token \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_WAIT_ATTEMPTS=1 \
+    "$MERGE_SCRIPT" wait "$CURRENT_RELEASE" >"$stdout"
+
+  assert_has_line "$stdout" "Verified current gh-mcp release is published: v${CURRENT_RELEASE}."
+  echo "ok - release wait command uses the read token"
+}
+
+test_wait_command_requires_repository() {
+  local stderr="${TEST_ROOT}/wait-command-missing-repository-stderr"
+
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=merge-success \
+    GH_TOKEN=read-token \
+    GITHUB_REPOSITORY='' \
+    RELEASE_WAIT_ATTEMPTS=1 \
+    "$MERGE_SCRIPT" wait "$CURRENT_RELEASE" >/dev/null 2>"$stderr"; then
+    fail "release wait command accepted a missing repository"
+  fi
+
+  assert_has_line "$stderr" "GITHUB_REPOSITORY must be set."
+  echo "ok - release wait command requires the repository"
+}
+
+test_rejects_base_advance_after_release_wait() {
+  local count_file="${TEST_ROOT}/pull-attempts"
+  local stderr="${TEST_ROOT}/base-advance-during-wait-stderr"
+
+  : >"$count_file"
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=merge-base-advances-during-wait \
+    GH_STUB_COUNT_FILE="$count_file" \
+    GH_TOKEN=read-token \
+    MERGE_TOKEN=merge-token \
+    GITHUB_REPOSITORY=test/repository \
+    "$MERGE_SCRIPT" merge 42 "$BASE_SHA" "$TARGET_SHA" \
+    "$CURRENT_RELEASE" "$CURRENT_UPSTREAM" "$NEXT_UPSTREAM" >/dev/null 2>"$stderr"; then
+    fail "merge accepted a base advance during the release wait"
+  fi
+
+  [[ "$(wc -l <"$count_file")" -eq 2 ]] || fail "merge did not re-fetch the PR after waiting"
+  assert_has_line "$stderr" \
+    "PR #42 base advanced while waiting for the current release; rerun CI against the current base."
+  echo "ok - merge rejects a base advance after waiting for the current release"
+}
+
+test_skips_head_move_after_release_wait() {
+  local count_file="${TEST_ROOT}/head-pull-attempts"
+  local stdout="${TEST_ROOT}/head-moved-during-wait-stdout"
+
+  : >"$count_file"
+  PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=merge-head-moves-during-wait \
+    GH_STUB_COUNT_FILE="$count_file" \
+    GH_TOKEN=read-token \
+    MERGE_TOKEN=merge-token \
+    GITHUB_REPOSITORY=test/repository \
+    "$MERGE_SCRIPT" merge 42 "$BASE_SHA" "$TARGET_SHA" \
+    "$CURRENT_RELEASE" "$CURRENT_UPSTREAM" "$NEXT_UPSTREAM" >"$stdout"
+
+  [[ "$(wc -l <"$count_file")" -eq 2 ]] || fail "merge did not re-fetch the PR after waiting"
+  assert_has_line "$stdout" \
+    "PR #42 head moved while waiting for the current release; skipping stale merge."
+  echo "ok - merge skips a moved head after waiting for the current release"
 }
 
 test_skips_major_update() {
@@ -404,6 +745,15 @@ test_inspect_skips_closed_draft_pr
 test_inspect_accepts_current_pr
 test_inspect_waits_for_rebase
 test_uses_exact_head_sha
-test_skips_stale_base
+test_rejects_stale_base
+test_rejects_out_of_order_release
+test_rejects_unpublished_current_release
+test_rejects_partial_current_release_response
+test_rejects_release_api_errors
+test_waits_for_current_release
+test_wait_command_uses_read_token
+test_wait_command_requires_repository
+test_rejects_base_advance_after_release_wait
+test_skips_head_move_after_release_wait
 test_skips_major_update
 test_accepts_same_major_update

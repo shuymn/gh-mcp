@@ -23,7 +23,7 @@ jobs:
       startsWith(github.event.workflow_run.head_branch,
       'renovate/github-github-mcp-server-')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 130
 
     steps:
       - name: Checkout trusted workflow tools
@@ -88,6 +88,15 @@ jobs:
           trusted/scripts/workflows/merge-upstream-release.sh
           eligible "$GENERATED_CHANGES" "$AUTO_MERGE"
 
+      - name: Wait for current release
+        if: steps.eligibility.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RELEASE: ${{ steps.prepare.outputs.current_release }}
+        run: >-
+          trusted/scripts/workflows/merge-upstream-release.sh
+          wait "$CURRENT_RELEASE"
+
       - name: Create repository-scoped app token
         if: steps.eligibility.outputs.eligible == 'true'
         id: app-token
@@ -107,6 +116,11 @@ jobs:
           PR_NUMBER: ${{ steps.inspect.outputs.pr_number }}
           BASE_SHA: ${{ steps.inspect.outputs.base_sha }}
           HEAD_SHA: ${{ steps.inspect.outputs.head_sha }}
+          CURRENT_RELEASE: ${{ steps.prepare.outputs.current_release }}
+          CURRENT_UPSTREAM: ${{ steps.prepare.outputs.current_upstream }}
+          NEXT_UPSTREAM: ${{ steps.prepare.outputs.upstream }}
+          RELEASE_WAIT_ATTEMPTS: 1
         run: >-
           trusted/scripts/workflows/merge-upstream-release.sh
           merge "$PR_NUMBER" "$BASE_SHA" "$HEAD_SHA"
+          "$CURRENT_RELEASE" "$CURRENT_UPSTREAM" "$NEXT_UPSTREAM"

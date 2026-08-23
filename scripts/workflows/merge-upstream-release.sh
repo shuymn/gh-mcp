@@ -164,8 +164,53 @@ inspect_workflow_run() {
   write_current_output true
 }
 
+wait_for_current_release() {
+  [[ $# -eq 1 ]] || die "Usage: wait_for_current_release <current-release>"
+  require_env GH_TOKEN
+  require_env GITHUB_REPOSITORY
+
+  local current_release=$1
+  # The preceding main CI and release jobs can take up to 110 minutes.
+  local attempts=${RELEASE_WAIT_ATTEMPTS:-241}
+  local wait_seconds=${RELEASE_WAIT_SECONDS:-30}
+  local current_release_tag published_tag status attempt
+
+  [[ "$current_release" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] ||
+    die "Current release must be canonical major.minor.patch: ${current_release}"
+  [[ "$attempts" =~ ^[1-9][0-9]*$ ]] || die "RELEASE_WAIT_ATTEMPTS must be a positive integer."
+  [[ "$wait_seconds" =~ ^(0|[1-9][0-9]*)$ ]] ||
+    die "RELEASE_WAIT_SECONDS must be a non-negative integer."
+
+  current_release_tag="v${current_release}"
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if published_tag="$(
+      gh api --method GET \
+        "repos/${GITHUB_REPOSITORY}/releases/tags/${current_release_tag}" \
+        --jq 'select(.draft == false and .prerelease == false and .immutable == true) | .tag_name' \
+        2>/dev/null
+    )"; then
+      if [[ "$published_tag" == "$current_release_tag" ]]; then
+        echo "Verified current gh-mcp release is published: ${current_release_tag}."
+        return 0
+      fi
+    else
+      status="$(jq -r '.status // empty' <<<"$published_tag")" ||
+        die "Failed to inspect current gh-mcp release ${current_release_tag}."
+      [[ "$status" == 404 ]] ||
+        die "Failed to inspect current gh-mcp release ${current_release_tag}: HTTP ${status:-unknown}."
+    fi
+    if ((attempt < attempts)); then
+      echo "Waiting for current gh-mcp release ${current_release_tag} to be published."
+      sleep "$wait_seconds"
+    fi
+  done
+
+  die "Current gh-mcp release is not published: ${current_release_tag}"
+}
+
 merge_pr() {
-  [[ $# -eq 3 ]] || die "Usage: $0 merge <pr-number> <base-sha> <head-sha>"
+  [[ $# -eq 6 ]] ||
+    die "Usage: $0 merge <pr-number> <base-sha> <head-sha> <current-release> <current-upstream> <next-upstream>"
   require_env GH_TOKEN
   require_env MERGE_TOKEN
   require_env GITHUB_REPOSITORY
@@ -173,6 +218,9 @@ merge_pr() {
   local pr_number=$1
   local expected_base_sha=$2
   local expected_head_sha=$3
+  local current_release=$4
+  local current_upstream=$5
+  local next_upstream=$6
   local response merged merge_sha message
 
   [[ "$expected_base_sha" =~ ^[0-9a-f]{40}$ ]] || die "Invalid expected base SHA."
@@ -185,10 +233,31 @@ merge_pr() {
     echo "PR #${LIVE_PR_NUMBER} is already closed; nothing to merge."
     return 0
   fi
-  if [[ "$LIVE_BASE_SHA" != "$expected_base_sha" || "$LIVE_HEAD_SHA" != "$expected_head_sha" ]]; then
-    echo "PR #${LIVE_PR_NUMBER} moved after canonical verification; skipping stale merge."
+  if [[ "$LIVE_HEAD_SHA" != "$expected_head_sha" ]]; then
+    echo "PR #${LIVE_PR_NUMBER} head moved after canonical verification; skipping stale merge."
     return 0
   fi
+  [[ "$LIVE_BASE_SHA" == "$expected_base_sha" ]] ||
+    die "PR #${LIVE_PR_NUMBER} base advanced after canonical verification; rerun CI against the current base."
+
+  "${BASH_SOURCE[0]%/*}/validate-upstream-release-order.sh" \
+    "$current_upstream" "$next_upstream"
+  wait_for_current_release "$current_release"
+
+  # Waiting for the previous release can take several minutes. A moved head
+  # makes this workflow run stale. An advanced base needs fresh CI instead of a
+  # successful no-op, because canonical metadata was verified against the old base.
+  load_pr "$pr_number"
+  if [[ "$LIVE_PR_STATE" == closed ]]; then
+    echo "PR #${LIVE_PR_NUMBER} is already closed; nothing to merge."
+    return 0
+  fi
+  if [[ "$LIVE_HEAD_SHA" != "$expected_head_sha" ]]; then
+    echo "PR #${LIVE_PR_NUMBER} head moved while waiting for the current release; skipping stale merge."
+    return 0
+  fi
+  [[ "$LIVE_BASE_SHA" == "$expected_base_sha" ]] ||
+    die "PR #${LIVE_PR_NUMBER} base advanced while waiting for the current release; rerun CI against the current base."
 
   response="$(
     GH_TOKEN="$MERGE_TOKEN" gh api --method PUT \
@@ -245,11 +314,15 @@ case "${1:-}" in
     shift
     check_eligibility "$@"
     ;;
+  wait)
+    shift
+    wait_for_current_release "$@"
+    ;;
   merge)
     shift
     merge_pr "$@"
     ;;
   *)
-    die "Usage: $0 {inspect|eligible|merge}"
+    die "Usage: $0 {inspect|eligible|wait|merge}"
     ;;
 esac
