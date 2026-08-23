@@ -231,17 +231,20 @@ merge_pr() {
     "$current_upstream" "$next_upstream"
   wait_for_current_release "$current_release"
 
-  # Waiting for the previous release can take several minutes. Revalidate both
-  # refs after the wait so only the exact base/head pair inspected above merges.
+  # Waiting for the previous release can take several minutes. A moved head
+  # makes this workflow run stale. An advanced base needs fresh CI instead of a
+  # successful no-op, because canonical metadata was verified against the old base.
   load_pr "$pr_number"
   if [[ "$LIVE_PR_STATE" == closed ]]; then
     echo "PR #${LIVE_PR_NUMBER} is already closed; nothing to merge."
     return 0
   fi
-  if [[ "$LIVE_BASE_SHA" != "$expected_base_sha" || "$LIVE_HEAD_SHA" != "$expected_head_sha" ]]; then
-    echo "PR #${LIVE_PR_NUMBER} moved while waiting for the current release; skipping stale merge."
+  if [[ "$LIVE_HEAD_SHA" != "$expected_head_sha" ]]; then
+    echo "PR #${LIVE_PR_NUMBER} head moved while waiting for the current release; skipping stale merge."
     return 0
   fi
+  [[ "$LIVE_BASE_SHA" == "$expected_base_sha" ]] ||
+    die "PR #${LIVE_PR_NUMBER} base advanced while waiting for the current release; rerun CI against the current base."
 
   response="$(
     GH_TOKEN="$MERGE_TOKEN" gh api --method PUT \

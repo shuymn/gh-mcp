@@ -191,7 +191,7 @@ stub_gh() {
         *) fail "unexpected wait-current-release endpoint: ${method}:${endpoint}" ;;
       esac
       ;;
-    merge-moves-during-wait)
+    merge-base-advances-during-wait)
       case "${method}:${endpoint}" in
         GET:*/pulls/42)
           : "${GH_STUB_COUNT_FILE:?}"
@@ -211,7 +211,30 @@ stub_gh() {
         PUT:*/pulls/42/merge)
           fail "PR that moved during the release wait reached the merge endpoint"
           ;;
-        *) fail "unexpected moved-during-wait endpoint: ${method}:${endpoint}" ;;
+        *) fail "unexpected base-advance-during-wait endpoint: ${method}:${endpoint}" ;;
+      esac
+      ;;
+    merge-head-moves-during-wait)
+      case "${method}:${endpoint}" in
+        GET:*/pulls/42)
+          : "${GH_STUB_COUNT_FILE:?}"
+          printf 'pull\n' >>"$GH_STUB_COUNT_FILE"
+          if [[ "$(wc -l <"$GH_STUB_COUNT_FILE")" -eq 1 ]]; then
+            print_pr renovate[bot]
+          else
+            print_pr renovate[bot] open "$MOVED_HEAD_SHA"
+          fi
+          ;;
+        GET:repos/test/repository/releases/tags/v"${CURRENT_RELEASE}")
+          printf 'v%s\n' "$CURRENT_RELEASE"
+          ;;
+        GET:repos/github/github-mcp-server/releases\?per_page=100)
+          printf '%s\n' "$NEXT_UPSTREAM" "$CURRENT_UPSTREAM"
+          ;;
+        PUT:*/pulls/42/merge)
+          fail "PR whose head moved during the release wait reached the merge endpoint"
+          ;;
+        *) fail "unexpected head-move-during-wait endpoint: ${method}:${endpoint}" ;;
       esac
       ;;
     *) fail "unexpected gh scenario: ${GH_STUB_SCENARIO}" ;;
@@ -247,9 +270,11 @@ readonly CURRENT_UPSTREAM="v1.10.0"
 readonly HEAD_REF="renovate/github-github-mcp-server-1.x"
 readonly LATER_UPSTREAM="v1.10.2"
 readonly MERGE_SHA="1111111111111111111111111111111111111111"
+readonly MOVED_HEAD_SHA="4444444444444444444444444444444444444444"
 readonly NEXT_UPSTREAM="v1.10.1"
 readonly TARGET_SHA="3333333333333333333333333333333333333333"
-export BASE_SHA CURRENT_RELEASE CURRENT_UPSTREAM HEAD_REF LATER_UPSTREAM MERGE_SHA NEXT_UPSTREAM TARGET_SHA
+export BASE_SHA CURRENT_RELEASE CURRENT_UPSTREAM HEAD_REF LATER_UPSTREAM MERGE_SHA MOVED_HEAD_SHA
+export NEXT_UPSTREAM TARGET_SHA
 
 assert_has_line() {
   local file=$1
@@ -564,13 +589,35 @@ test_waits_for_current_release() {
   echo "ok - merge waits for the current gh-mcp release"
 }
 
-test_rechecks_refs_after_release_wait() {
+test_rejects_base_advance_after_release_wait() {
   local count_file="${TEST_ROOT}/pull-attempts"
-  local stdout="${TEST_ROOT}/moved-during-wait-stdout"
+  local stderr="${TEST_ROOT}/base-advance-during-wait-stderr"
+
+  : >"$count_file"
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=merge-base-advances-during-wait \
+    GH_STUB_COUNT_FILE="$count_file" \
+    GH_TOKEN=read-token \
+    MERGE_TOKEN=merge-token \
+    GITHUB_REPOSITORY=test/repository \
+    "$MERGE_SCRIPT" merge 42 "$BASE_SHA" "$TARGET_SHA" \
+    "$CURRENT_RELEASE" "$CURRENT_UPSTREAM" "$NEXT_UPSTREAM" >/dev/null 2>"$stderr"; then
+    fail "merge accepted a base advance during the release wait"
+  fi
+
+  [[ "$(wc -l <"$count_file")" -eq 2 ]] || fail "merge did not re-fetch the PR after waiting"
+  assert_has_line "$stderr" \
+    "PR #42 base advanced while waiting for the current release; rerun CI against the current base."
+  echo "ok - merge rejects a base advance after waiting for the current release"
+}
+
+test_skips_head_move_after_release_wait() {
+  local count_file="${TEST_ROOT}/head-pull-attempts"
+  local stdout="${TEST_ROOT}/head-moved-during-wait-stdout"
 
   : >"$count_file"
   PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
-    GH_STUB_SCENARIO=merge-moves-during-wait \
+    GH_STUB_SCENARIO=merge-head-moves-during-wait \
     GH_STUB_COUNT_FILE="$count_file" \
     GH_TOKEN=read-token \
     MERGE_TOKEN=merge-token \
@@ -580,8 +627,8 @@ test_rechecks_refs_after_release_wait() {
 
   [[ "$(wc -l <"$count_file")" -eq 2 ]] || fail "merge did not re-fetch the PR after waiting"
   assert_has_line "$stdout" \
-    "PR #42 moved while waiting for the current release; skipping stale merge."
-  echo "ok - merge rechecks refs after waiting for the current release"
+    "PR #42 head moved while waiting for the current release; skipping stale merge."
+  echo "ok - merge skips a moved head after waiting for the current release"
 }
 
 test_skips_major_update() {
@@ -620,6 +667,7 @@ test_rejects_out_of_order_release
 test_rejects_unpublished_current_release
 test_rejects_partial_current_release_response
 test_waits_for_current_release
-test_rechecks_refs_after_release_wait
+test_rejects_base_advance_after_release_wait
+test_skips_head_move_after_release_wait
 test_skips_major_update
 test_accepts_same_major_update
