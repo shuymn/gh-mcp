@@ -168,7 +168,8 @@ wait_for_current_release() {
   [[ $# -eq 1 ]] || die "Usage: wait_for_current_release <current-release>"
 
   local current_release=$1
-  local attempts=${RELEASE_WAIT_ATTEMPTS:-20}
+  # The preceding main CI and release jobs can take up to 110 minutes.
+  local attempts=${RELEASE_WAIT_ATTEMPTS:-241}
   local wait_seconds=${RELEASE_WAIT_SECONDS:-30}
   local current_release_tag published_tag attempt
 
