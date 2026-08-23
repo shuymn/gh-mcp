@@ -166,6 +166,7 @@ inspect_workflow_run() {
 
 wait_for_current_release() {
   [[ $# -eq 1 ]] || die "Usage: wait_for_current_release <current-release>"
+  require_env GH_TOKEN
 
   local current_release=$1
   # The preceding main CI and release jobs can take up to 110 minutes.
@@ -302,11 +303,15 @@ case "${1:-}" in
     shift
     check_eligibility "$@"
     ;;
+  wait)
+    shift
+    wait_for_current_release "$@"
+    ;;
   merge)
     shift
     merge_pr "$@"
     ;;
   *)
-    die "Usage: $0 {inspect|eligible|merge}"
+    die "Usage: $0 {inspect|eligible|wait|merge}"
     ;;
 esac

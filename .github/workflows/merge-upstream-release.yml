@@ -88,6 +88,15 @@ jobs:
           trusted/scripts/workflows/merge-upstream-release.sh
           eligible "$GENERATED_CHANGES" "$AUTO_MERGE"
 
+      - name: Wait for current release
+        if: steps.eligibility.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RELEASE: ${{ steps.prepare.outputs.current_release }}
+        run: >-
+          trusted/scripts/workflows/merge-upstream-release.sh
+          wait "$CURRENT_RELEASE"
+
       - name: Create repository-scoped app token
         if: steps.eligibility.outputs.eligible == 'true'
         id: app-token
@@ -110,6 +119,7 @@ jobs:
           CURRENT_RELEASE: ${{ steps.prepare.outputs.current_release }}
           CURRENT_UPSTREAM: ${{ steps.prepare.outputs.current_upstream }}
           NEXT_UPSTREAM: ${{ steps.prepare.outputs.upstream }}
+          RELEASE_WAIT_ATTEMPTS: 1
         run: >-
           trusted/scripts/workflows/merge-upstream-release.sh
           merge "$PR_NUMBER" "$BASE_SHA" "$HEAD_SHA"

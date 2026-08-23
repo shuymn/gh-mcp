@@ -597,6 +597,20 @@ test_waits_for_current_release() {
   echo "ok - merge waits for the current gh-mcp release"
 }
 
+test_wait_command_uses_read_token() {
+  local stdout="${TEST_ROOT}/wait-command-stdout"
+
+  PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=merge-success \
+    GH_TOKEN=read-token \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_WAIT_ATTEMPTS=1 \
+    "$MERGE_SCRIPT" wait "$CURRENT_RELEASE" >"$stdout"
+
+  assert_has_line "$stdout" "Verified current gh-mcp release is published: v${CURRENT_RELEASE}."
+  echo "ok - release wait command uses the read token"
+}
+
 test_rejects_base_advance_after_release_wait() {
   local count_file="${TEST_ROOT}/pull-attempts"
   local stderr="${TEST_ROOT}/base-advance-during-wait-stderr"
@@ -675,6 +689,7 @@ test_rejects_out_of_order_release
 test_rejects_unpublished_current_release
 test_rejects_partial_current_release_response
 test_waits_for_current_release
+test_wait_command_uses_read_token
 test_rejects_base_advance_after_release_wait
 test_skips_head_move_after_release_wait
 test_skips_major_update
