@@ -662,6 +662,7 @@ test_wait_command_requires_repository() {
   if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
     GH_STUB_SCENARIO=merge-success \
     GH_TOKEN=read-token \
+    GITHUB_REPOSITORY='' \
     RELEASE_WAIT_ATTEMPTS=1 \
     "$MERGE_SCRIPT" wait "$CURRENT_RELEASE" >/dev/null 2>"$stderr"; then
     fail "release wait command accepted a missing repository"
