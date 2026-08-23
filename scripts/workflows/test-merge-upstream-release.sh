@@ -50,6 +50,7 @@ stub_gh() {
 
   local argument
   local endpoint
+  local jq_filter=""
   local method=GET
   local previous=""
   local saw_head_sha=false
@@ -59,11 +60,18 @@ stub_gh() {
     if [[ "$previous" == --method ]]; then
       method=$argument
     fi
+    if [[ "$previous" == --jq ]]; then
+      jq_filter=$argument
+    fi
     [[ "$argument" == "sha=${TARGET_SHA:-}" ]] && saw_head_sha=true
     [[ "$argument" == merge_method=merge ]] && saw_merge_method=true
     previous=$argument
   done
   endpoint="$(find_api_endpoint "$@")" || fail "gh api endpoint is missing: $*"
+  if [[ "$endpoint" == repos/test/repository/releases/tags/* ]]; then
+    [[ "$jq_filter" == 'select(.draft == false and .prerelease == false and .immutable == true) | .tag_name' ]] ||
+      fail "release lookup omitted the stable immutable filter"
+  fi
 
   case "${GH_STUB_SCENARIO:?}" in
     identity-mismatch)
