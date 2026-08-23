@@ -227,24 +227,35 @@ test_inspect_rejects_identity_mismatch() {
 
 test_inspect_requires_exactly_one_pr() {
   local event="${TEST_ROOT}/pr-count-event"
-  local invalid_event="${TEST_ROOT}/pr-count-invalid-event"
+  local invalid_event
   local output="${TEST_ROOT}/pr-count-output"
+  local pr_count
   local stderr="${TEST_ROOT}/pr-count-stderr"
 
   create_workflow_run_event "$event"
-  jq '.workflow_run.pull_requests = []' "$event" >"$invalid_event"
-  : >"$output"
-  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
-    GH_STUB_SCENARIO=merge-success \
-    GH_TOKEN=test-token \
-    GITHUB_EVENT_PATH="$invalid_event" \
-    GITHUB_OUTPUT="$output" \
-    GITHUB_REPOSITORY=test/repository \
-    "$MERGE_SCRIPT" inspect 2>"$stderr"; then
-    fail "merge inspection accepted a workflow run without exactly one PR"
-  fi
+  for pr_count in 0 2; do
+    invalid_event="${TEST_ROOT}/pr-count-${pr_count}-invalid-event"
+    if ((pr_count == 0)); then
+      jq '.workflow_run.pull_requests = []' "$event" >"$invalid_event"
+    else
+      jq '.workflow_run.pull_requests += [.workflow_run.pull_requests[0]]' \
+        "$event" >"$invalid_event"
+    fi
 
-  assert_has_line "$stderr" "CI workflow run must reference exactly one PR."
+    : >"$output"
+    : >"$stderr"
+    if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+      GH_STUB_SCENARIO=merge-success \
+      GH_TOKEN=test-token \
+      GITHUB_EVENT_PATH="$invalid_event" \
+      GITHUB_OUTPUT="$output" \
+      GITHUB_REPOSITORY=test/repository \
+      "$MERGE_SCRIPT" inspect 2>"$stderr"; then
+      fail "merge inspection accepted a workflow run with ${pr_count} PRs"
+    fi
+
+    assert_has_line "$stderr" "CI workflow run must reference exactly one PR."
+  done
   echo "ok - merge inspection requires exactly one PR"
 }
 

@@ -1,20 +1,25 @@
 package main
 
 import (
+	"errors"
 	"testing"
 )
 
 // mockAuth implements authInterface for testing
 type mockAuth struct {
-	defaultHost  string
-	tokenForHost string
+	defaultHost        string
+	tokenForHost       string
+	tokenForHostCalled bool
+	requestedForHost   string
 }
 
 func (m *mockAuth) DefaultHost() string {
 	return m.defaultHost
 }
 
-func (m *mockAuth) TokenForHost(_ string) string {
+func (m *mockAuth) TokenForHost(host string) string {
+	m.tokenForHostCalled = true
+	m.requestedForHost = host
 	return m.tokenForHost
 }
 
@@ -23,7 +28,7 @@ func TestGetAuthDetailsWithAuth(t *testing.T) {
 		name    string
 		mock    *mockAuth
 		want    *authDetails
-		wantErr string
+		wantErr error
 	}{
 		{
 			name: "successful auth",
@@ -42,7 +47,7 @@ func TestGetAuthDetailsWithAuth(t *testing.T) {
 				defaultHost:  "github.com",
 				tokenForHost: "",
 			},
-			wantErr: ErrNotLoggedIn.Error(),
+			wantErr: ErrNotLoggedIn,
 		},
 		{
 			name: "empty host",
@@ -50,7 +55,7 @@ func TestGetAuthDetailsWithAuth(t *testing.T) {
 				defaultHost:  "",
 				tokenForHost: "some-token",
 			},
-			wantErr: ErrNoHost.Error(),
+			wantErr: ErrNoHost,
 		},
 		{
 			name: "enterprise host",
@@ -91,13 +96,31 @@ func TestGetAuthDetailsWithAuth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := getAuthDetails(tt.mock)
 
-			if tt.wantErr != "" {
-				if err == nil {
-					t.Errorf("expected error %q, got nil", tt.wantErr)
-					return
+			if tt.mock.defaultHost == "" {
+				if tt.mock.tokenForHostCalled {
+					t.Errorf(
+						"TokenForHost called with %q for empty default host",
+						tt.mock.requestedForHost,
+					)
 				}
-				if err.Error() != tt.wantErr {
-					t.Errorf("error = %q, want %q", err.Error(), tt.wantErr)
+			} else {
+				if !tt.mock.tokenForHostCalled {
+					t.Error("TokenForHost was not called")
+				} else if tt.mock.requestedForHost != tt.mock.defaultHost {
+					t.Errorf(
+						"TokenForHost called with %q, want %q",
+						tt.mock.requestedForHost,
+						tt.mock.defaultHost,
+					)
+				}
+			}
+
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Errorf("error = %v, want %v", err, tt.wantErr)
+				}
+				if got != nil {
+					t.Errorf("auth details = %#v, want nil", got)
 				}
 				return
 			}
