@@ -50,6 +50,17 @@ stub_git() {
   exec "${REAL_GIT:?}" "$@"
 }
 
+stub_jq() {
+  if [[ "${JQ_STUB_SCENARIO:-}" == missing-draft-release &&
+    "${1:-}" == -cs ]]; then
+    cat >/dev/null
+    printf '{"status":"draft"}\n'
+    return 0
+  fi
+
+  exec "${REAL_JQ:?}" "$@"
+}
+
 find_api_endpoint() {
   local argument
 
@@ -325,6 +336,10 @@ case "${0##*/}" in
     stub_gh "$@"
     exit 0
     ;;
+  jq)
+    stub_jq "$@"
+    exit 0
+    ;;
   sleep)
     stub_sleep "$@"
     exit 0
@@ -333,8 +348,9 @@ esac
 
 readonly ORIGINAL_PATH="$PATH"
 REAL_GIT="$(command -v git)"
-readonly REAL_GIT
-export REAL_GIT
+REAL_JQ="$(command -v jq)"
+readonly REAL_GIT REAL_JQ
+export REAL_GIT REAL_JQ
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
@@ -349,6 +365,7 @@ readonly STUB_BIN="${TEST_ROOT}/bin"
 mkdir -p "$STUB_BIN"
 ln -s "${SCRIPT_DIR}/${BASH_SOURCE[0]##*/}" "${STUB_BIN}/gh"
 ln -s "${SCRIPT_DIR}/${BASH_SOURCE[0]##*/}" "${STUB_BIN}/git"
+ln -s "${SCRIPT_DIR}/${BASH_SOURCE[0]##*/}" "${STUB_BIN}/jq"
 ln -s "${SCRIPT_DIR}/${BASH_SOURCE[0]##*/}" "${STUB_BIN}/sleep"
 
 cleanup() {
@@ -702,6 +719,28 @@ test_release_rejects_newer_release_before_draft_publish() {
   echo "ok - release rejects a newer release before draft publication"
 }
 
+test_release_rejects_invalid_draft_extraction() {
+  local stderr="${TEST_ROOT}/invalid-draft-extraction-stderr"
+  local runner_temp="${TEST_ROOT}/invalid-draft-extraction-runner"
+
+  mkdir -p "$runner_temp"
+  if PATH="${STUB_BIN}:${ORIGINAL_PATH}" \
+    GH_STUB_SCENARIO=draft-release-paginated \
+    JQ_STUB_SCENARIO=missing-draft-release \
+    GITHUB_REPOSITORY=test/repository \
+    RELEASE_TAG="v${current_version}" \
+    RUNNER_TEMP="$runner_temp" \
+    SOURCE_DIGEST="$TARGET_SHA" \
+    "$RELEASE_SCRIPT" verify-draft \
+    >/dev/null 2>"$stderr"; then
+    fail "release verification accepted an invalid draft extraction"
+  fi
+
+  assert_has_line "$stderr" \
+    "Failed to extract draft release v${current_version}."
+  echo "ok - release rejects an invalid draft extraction"
+}
+
 test_release_rejects_partial_release_list_failure() {
   local stderr="${TEST_ROOT}/partial-release-stderr"
   local runner_temp="${TEST_ROOT}/partial-release-runner"
@@ -741,4 +780,5 @@ test_release_rejects_moved_draft_tag
 test_release_rejects_changed_draft_release
 test_release_rejects_newer_release_before_tag_creation
 test_release_rejects_newer_release_before_draft_publish
+test_release_rejects_invalid_draft_extraction
 test_release_rejects_partial_release_list_failure

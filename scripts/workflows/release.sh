@@ -102,8 +102,11 @@ load_draft_release() {
   local api_status
   local parse_status
   local response
+  local draft_release
+  local lookup_fields_output
   local lookup_result
   local lookup_status
+  local -a lookup_fields
 
   for ((attempt = 1; attempt <= DRAFT_RELEASE_LOOKUP_ATTEMPTS; attempt++)); do
     if response="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100")"; then
@@ -135,16 +138,36 @@ load_draft_release() {
       return 2
     fi
 
-    if lookup_status="$(jq -r '.status' <<<"$lookup_result")"; then
-      :
+    if lookup_fields_output="$(
+      jq -er '
+        .status as $status |
+        if $status == "draft" then
+          [
+            $status,
+            (
+              .release |
+              if type == "object" then tojson
+              else error("draft release payload missing")
+              end
+            )
+          ]
+        else
+          [$status]
+        end |
+        .[]
+      ' <<<"$lookup_result"
+    )"; then
+      mapfile -t lookup_fields <<<"$lookup_fields_output"
+      lookup_status="${lookup_fields[0]:-}"
+      draft_release="${lookup_fields[1]:-}"
     else
-      echo "Failed to classify release list while looking for draft ${tag}." >&2
+      echo "Failed to extract draft release ${tag}." >&2
       return 2
     fi
 
     case "$lookup_status" in
       draft)
-        jq -c '.release' <<<"$lookup_result"
+        printf '%s\n' "$draft_release"
         return 0
         ;;
       missing)
