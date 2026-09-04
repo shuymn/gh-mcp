@@ -6,7 +6,7 @@ import _ "embed"
 
 const (
 	bundledMCPArchiveName    = "github-mcp-server_Windows_x86_64.zip"
-	bundledMCPArchiveSHA256  = "d16a3b2bbf775365541aa18729c0c3ff5e1b26dfb5dc190928895ba482211268"
+	bundledMCPArchiveSHA256  = "bc8782deda12dc1f36a182d0205bb4f11b05aee0eec7e2c8c109bb8f622fb4b4"
 	bundledMCPExecutableName = "github-mcp-server.exe"
 )
 
