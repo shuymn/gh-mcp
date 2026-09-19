@@ -1,12 +1,12 @@
 module github.com/shuymn/gh-mcp
 
-go 1.25.0
+go 1.26.0
 
 toolchain go1.26.6
 
 require (
 	github.com/cli/go-gh/v2 v2.16.1
-	golang.org/x/sys v0.47.0
+	golang.org/x/sys v0.48.0
 )
 
 require (
