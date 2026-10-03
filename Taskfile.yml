@@ -6,7 +6,7 @@ vars:
   COVERAGE_FILE: coverage.out
   BIN_DIR: bin
   GOLANGCI_LINT_VERSION: v2.12.2
-  SHFMT_VERSION: v3.14.0
+  SHFMT_VERSION: v3.14.1
 
 tasks:
   default:
