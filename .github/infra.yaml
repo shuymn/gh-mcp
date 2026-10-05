@@ -53,9 +53,6 @@ spec:
     - name: default
       target: branch
       enforcement: active
-      bypass_actors:
-        - app: "id:1460880"
-          bypass_mode: pull_request
       conditions:
         ref_name:
           include:
@@ -114,12 +111,9 @@ spec:
         - actions/cache@*
         - actions/checkout@*
         - actions/create-github-app-token@*
-        - actions/github-script@*
         - actions/setup-go@*
         - actions/upload-artifact@*
         - cli/gh-extension-precompile@*
-        - go-task/setup-task@*
         - golangci/golangci-lint-action@*
-        - k1LoW/gh-setup@*
         - k1LoW/octocov-action@*
     fork_pr_approval: all_external_contributors
