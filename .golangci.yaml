@@ -23,8 +23,16 @@ linters:
   settings:
     mnd:
       ignored-numbers:
+        - "0o644"
         - "0o700"
         - "0o755"
+    tagliatelle:
+      case:
+        rules:
+          json: snake
+    wrapcheck:
+      ignore-package-globs:
+        - github.com/shuymn/gh-mcp/*
   exclusions:
     warn-unused: true
     presets:
@@ -37,6 +45,11 @@ linters:
           - err113
           - noctx
         path: _test\.go
+      # Release tooling reads and writes maintainer-chosen repository paths.
+      - linters:
+          - gosec
+        path: ^tools/
+        text: "G(204|304|306|702|703)"
 formatters:
   enable:
     - gci

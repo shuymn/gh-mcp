@@ -1,0 +1,45 @@
+{
+  "version": "v1.14.0",
+  "platforms": {
+    "darwin/amd64": {
+      "asset": "github-mcp-server_Darwin_x86_64.tar.gz",
+      "archive_sha256": "82c84d005eaef04755295e1bf0118766f59ef39196bf8142e58b5aca9e16c6ac",
+      "binary_sha256": "9efb3b32a77a7efc40e619d72e590c4cd81b19bf5d7aacae2c7872c6171008b9"
+    },
+    "darwin/arm64": {
+      "asset": "github-mcp-server_Darwin_arm64.tar.gz",
+      "archive_sha256": "e3baa88424ecc24ae504a1c98c128823fc2c2edbe9dd64e1456f39edea701140",
+      "binary_sha256": "9d162f10d3c15fba2f395ab6fa45cce72f9e8f75d8096ba38876ecd39ef29d96"
+    },
+    "linux/386": {
+      "asset": "github-mcp-server_Linux_i386.tar.gz",
+      "archive_sha256": "9dcfd6538e84067722a2736399e9ffcad6c377fa5e8bb1d8583fb01485b4796d",
+      "binary_sha256": "96dfc484a2b4e85c6df1db4be005ee1d22b3af9d863e9bc3cb72478bcbe7b3c8"
+    },
+    "linux/amd64": {
+      "asset": "github-mcp-server_Linux_x86_64.tar.gz",
+      "archive_sha256": "2fcad56bb164b6c4918fdd9f1d5572257bf4e1f14b7eb1119d015b079818fd38",
+      "binary_sha256": "89c497784733a615a504dd28da04d200173a2a8b4764668c8634093b7c97b893"
+    },
+    "linux/arm64": {
+      "asset": "github-mcp-server_Linux_arm64.tar.gz",
+      "archive_sha256": "dd06beb81e62c42afa2d4217d86be79ca588a083f63da38ca3cbef0b7785e88d",
+      "binary_sha256": "fce88b2e60e0fddff7bf8adba77e77b9e32a906e57251ba88a196257f49a6a24"
+    },
+    "windows/386": {
+      "asset": "github-mcp-server_Windows_i386.zip",
+      "archive_sha256": "def0852f819fe4d8ef4e9f010d883db0261d13407abe9db26ea7b36cefd73ff8",
+      "binary_sha256": "4f33ab9b66d576649e8b5287f0e56154916a3ffd7d4f1889cde836abb8e311a5"
+    },
+    "windows/amd64": {
+      "asset": "github-mcp-server_Windows_x86_64.zip",
+      "archive_sha256": "0277e5fca965ae7fa31c7193954eae948ddc13997bc4b835858be858ac55cabe",
+      "binary_sha256": "f8b9106ca1a47db457b825ba72aeceb9f0e582037376892bcb7f62076a087f45"
+    },
+    "windows/arm64": {
+      "asset": "github-mcp-server_Windows_arm64.zip",
+      "archive_sha256": "c87a15210f0e4284f26968d563767e1895dd457b83faaddd96e24c9c99b0dbf7",
+      "binary_sha256": "7d64f07a268b422ce206f2c9dce078e87d8e6685816f8446e8ad6044254f99ed"
+    }
+  }
+}

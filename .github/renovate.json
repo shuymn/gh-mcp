@@ -14,9 +14,9 @@
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": ["/^mcp_version\\.go$/"],
+      "managerFilePatterns": ["/^server\\.lock\\.json$/"],
       "matchStrings": [
-        "const mcpServerVersion = \"(?<currentValue>v\\d+\\.\\d+\\.\\d+)\""
+        "\"version\": \"(?<currentValue>v\\d+\\.\\d+\\.\\d+)\""
       ],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "github/github-mcp-server"
@@ -29,20 +29,11 @@
       ],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "golangci/golangci-lint"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": ["/^Taskfile\\.yml$/"],
-      "matchStrings": [
-        "SHFMT_VERSION: (?<currentValue>v?\\d+\\.\\d+\\.\\d+)"
-      ],
-      "datasourceTemplate": "github-releases",
-      "depNameTemplate": "mvdan/sh"
     }
   ],
   "packageRules": [
     {
-      "description": "Keep observed github-mcp-server releases on distinct branches",
+      "description": "Propose each github-mcp-server release on its own branch so none is skipped",
       "matchDatasources": ["github-releases"],
       "matchPackageNames": ["github/github-mcp-server"],
       "allowedVersions": "<=v{{major}}.{{minor}}.{{add patch 1}} || v{{major}}.{{add minor 1}}.0 || v{{add major 1}}.0.0",
@@ -61,7 +52,7 @@
       "matchDatasources": ["github-releases"],
       "matchPackageNames": ["github/github-mcp-server"],
       "matchUpdateTypes": ["minor", "patch"],
-      "automerge": false,
+      "automerge": true,
       "minimumReleaseAge": "1 day",
       "internalChecksFilter": "strict",
       "rebaseWhen": "behind-base-branch"

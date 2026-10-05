@@ -5,5 +5,7 @@
 /.gemini/
 /.claude/
 /bin/
-/bundled/github-mcp-server_*
+/dist/
+/.cache/
+/payload/server.archive
 /.task/

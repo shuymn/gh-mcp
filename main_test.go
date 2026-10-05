@@ -1,247 +1,247 @@
 package main
 
 import (
-	"context"
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"errors"
-	"log/slog"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/shuymn/gh-mcp/internal/artifact"
+	"github.com/shuymn/gh-mcp/internal/identity"
 )
 
-// Define a static error for testing.
-var errServerNonZero = errors.New("server exited with non-zero status: 1")
-
-// mockRunner implements runner for testing.
-type mockRunner struct {
-	authDetails     *authDetails
-	authErr         error
-	runServerErr    error
-	runServerCalled bool
-	capturedEnv     []string
+type execCall struct {
+	path string
+	args []string
+	env  []string
 }
 
-func (m *mockRunner) getAuth() (*authDetails, error) {
-	return m.authDetails, m.authErr
+func testLauncher(
+	t *testing.T,
+	token string,
+	archive []byte,
+	lock artifact.Lock,
+) (*launcher, *execCall, *bytes.Buffer) {
+	t.Helper()
+
+	lockJSON, err := lock.Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(t.TempDir(), "gh-mcp")
+	call := &execCall{}
+	stderr := &bytes.Buffer{}
+
+	return &launcher{
+		args:      []string{"--read-only"},
+		environ:   []string{"GITHUB_TOOLSETS=repos", "GH_TOKEN=leak"},
+		goos:      "linux",
+		goarch:    "amd64",
+		stderr:    stderr,
+		lock:      lockJSON,
+		archive:   func() ([]byte, error) { return archive, nil },
+		cacheRoot: func() (string, error) { return root, nil },
+		identity: identity.Source{
+			DefaultHost:  func() (string, string) { return "github.com", "" },
+			TokenForHost: func(string) (string, string) { return token, "" },
+		},
+		exec: func(path string, args, env []string) (int, error) {
+			*call = execCall{path, args, env}
+			return 7, nil
+		},
+	}, call, stderr
 }
 
-func (m *mockRunner) runServer(_ context.Context, env []string, _ *ioStreams) error {
-	m.runServerCalled = true
-	m.capturedEnv = env
-	return m.runServerErr
-}
+func serverFixture(t *testing.T) ([]byte, artifact.Lock) {
+	t.Helper()
 
-func TestRunWithRunner(t *testing.T) {
-	tests := []struct {
-		name          string
-		mock          *mockRunner
-		wantErr       error
-		wantRunServer bool
-		wantHost      string
-	}{
-		{
-			name: "auth error",
-			mock: &mockRunner{
-				authErr: ErrNotLoggedIn,
-			},
-			wantErr: ErrNotLoggedIn,
+	content := []byte("server")
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	if err := tw.WriteHeader(
+		&tar.Header{
+			Name:     "github-mcp-server",
+			Mode:     0o755,
+			Size:     int64(len(content)),
+			Typeflag: tar.TypeReg,
 		},
-		{
-			name: "run server error",
-			mock: &mockRunner{
-				authDetails: &authDetails{
-					Host:  "https://github.com",
-					Token: "test-token",
-				},
-				runServerErr: errServerNonZero,
-			},
-			wantErr:       errServerNonZero,
-			wantRunServer: true,
-		},
-		{
-			name: "enterprise host",
-			mock: &mockRunner{
-				authDetails: &authDetails{
-					Host:  "https://github.enterprise.com",
-					Token: "enterprise-token",
-				},
-			},
-			wantRunServer: true,
-			wantHost:      "https://github.enterprise.com",
-		},
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write(content); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
 	}
 
+	return buf.Bytes(), artifact.Lock{
+		Version: "v1.14.0",
+		Platforms: map[string]artifact.Platform{"linux/amd64": {
+			Asset:         "github-mcp-server_Linux_x86_64.tar.gz",
+			ArchiveSHA256: artifact.SHA256Hex(buf.Bytes()),
+			BinarySHA256:  artifact.SHA256Hex(content),
+		}},
+	}
+}
+
+func TestRunExecsServerWithCredentialsAndArgs(t *testing.T) {
+	archive, lock := serverFixture(t)
+	l, call, stderr := testLauncher(t, "gho_x", archive, lock)
+
+	if code := l.run(); code != 7 {
+		t.Fatalf("run() = %d, want the server's exit code 7; stderr=%s", code, stderr)
+	}
+	if !strings.HasSuffix(call.path, "github-mcp-server") {
+		t.Errorf("exec path = %s", call.path)
+	}
+	if want := []string{"stdio", "--read-only"}; !slices.Equal(call.args, want) {
+		t.Errorf("exec args = %v, want %v", call.args, want)
+	}
+	want := []string{
+		"GITHUB_TOOLSETS=repos",
+		"GITHUB_HOST=https://github.com",
+		"GITHUB_PERSONAL_ACCESS_TOKEN=gho_x",
+	}
+	if !slices.Equal(call.env, want) {
+		t.Errorf("exec env = %v, want %v", call.env, want)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr = %q, want silence on success", stderr)
+	}
+}
+
+func TestRunReportsErrorsWithoutStartingServer(t *testing.T) {
+	archive, lock := serverFixture(t)
+
+	tests := []struct {
+		name    string
+		token   string
+		archive []byte
+		goarch  string
+		want    string
+	}{
+		{name: "not logged in", archive: archive, goarch: "amd64", want: "gh auth login"},
+		{name: "no payload", token: "t", goarch: "amd64", want: "task build"},
+		{
+			name:    "unsupported platform",
+			token:   "t",
+			archive: archive,
+			goarch:  "riscv64",
+			want:    "linux/riscv64",
+		},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := runWithRunner(t.Context(), tt.mock)
+			l, call, stderr := testLauncher(t, tt.token, tt.archive, lock)
+			l.goarch = tt.goarch
 
-			if !errors.Is(err, tt.wantErr) {
-				t.Errorf("error = %v, want %v", err, tt.wantErr)
+			if code := l.run(); code != 1 {
+				t.Errorf("run() = %d, want 1", code)
 			}
-			if tt.mock.runServerCalled != tt.wantRunServer {
-				t.Errorf(
-					"runServer called = %t, want %t",
-					tt.mock.runServerCalled,
-					tt.wantRunServer,
-				)
+			if call.path != "" {
+				t.Errorf("server started: %+v", call)
 			}
-			if tt.wantHost != "" {
-				expectedHost := "GITHUB_HOST=" + tt.wantHost
-				if !slices.Contains(tt.mock.capturedEnv, expectedHost) {
-					t.Errorf("%s not found in %v", expectedHost, tt.mock.capturedEnv)
+			if !strings.HasPrefix(stderr.String(), "gh-mcp: ") ||
+				!strings.Contains(stderr.String(), tt.want) {
+				t.Errorf("stderr = %q, want a gh-mcp line mentioning %q", stderr, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunPreparesAgainWhenExecutableVanishes(t *testing.T) {
+	archive, lock := serverFixture(t)
+
+	tests := []struct {
+		name      string
+		archive   []byte
+		failures  []error
+		wantCalls int
+		wantCode  int
+		wantErr   string
+	}{
+		{
+			name:      "vanished once is reinstalled",
+			archive:   archive,
+			failures:  []error{fs.ErrNotExist},
+			wantCalls: 2,
+			wantCode:  7,
+		},
+		{
+			name:      "vanished twice gives up",
+			archive:   archive,
+			failures:  []error{fs.ErrNotExist, fs.ErrNotExist},
+			wantCalls: 2,
+			wantCode:  1,
+			wantErr:   "file does not exist",
+		},
+		{
+			name:      "permission error is not retried",
+			archive:   archive,
+			failures:  []error{fs.ErrPermission},
+			wantCalls: 1,
+			wantCode:  1,
+			wantErr:   "permission denied",
+		},
+		{
+			name:      "build without payload cannot reinstall",
+			failures:  []error{fs.ErrNotExist},
+			wantCalls: 1,
+			wantCode:  1,
+			wantErr:   "task build",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l, _, stderr := testLauncher(t, "t", archive, lock)
+			// Install once so a build without payload starts from a cache hit.
+			if code := l.run(); code != 7 {
+				t.Fatalf("warm-up run() = %d; stderr=%s", code, stderr)
+			}
+			l.archive = func() ([]byte, error) { return tt.archive, nil }
+
+			calls := 0
+			l.exec = func(path string, _, _ []string) (int, error) {
+				calls++
+				if calls > len(tt.failures) {
+					return 7, nil
 				}
+				// Simulate a concurrent prune between Ensure and exec.
+				if errors.Is(tt.failures[calls-1], fs.ErrNotExist) {
+					if err := os.RemoveAll(filepath.Dir(path)); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return 1, &fs.PathError{Op: "exec", Path: path, Err: tt.failures[calls-1]}
+			}
+			stderr.Reset()
+
+			if code := l.run(); code != tt.wantCode {
+				t.Errorf("run() = %d, want %d; stderr=%s", code, tt.wantCode, stderr)
+			}
+			if calls != tt.wantCalls {
+				t.Errorf("exec calls = %d, want %d", calls, tt.wantCalls)
+			}
+			if !strings.Contains(stderr.String(), tt.wantErr) {
+				t.Errorf("stderr = %q, want it to mention %q", stderr, tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestOptionalEnvironmentVariables(t *testing.T) {
-	// Set test values using t.Setenv (automatically cleaned up).
-	t.Setenv("GITHUB_TOOLSETS", "repos,issues")
-	t.Setenv("GITHUB_TOOLS", "get_file_contents")
-	t.Setenv("GITHUB_DYNAMIC_TOOLSETS", "1")
-	t.Setenv("GITHUB_READ_ONLY", "1")
-	t.Setenv("GITHUB_LOCKDOWN_MODE", "1")
-
-	// Create a mock that captures the env parameter.
-	mock := &mockRunner{
-		authDetails: &authDetails{
-			Host:  "https://github.com",
-			Token: "test-token",
-		},
-	}
-
-	err := runWithRunner(t.Context(), mock)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Check that all expected env vars are present.
-	expectedEnvs := map[string]string{
-		"GITHUB_PERSONAL_ACCESS_TOKEN": "test-token",
-		"GITHUB_HOST":                  "https://github.com",
-		"GITHUB_TOOLSETS":              "repos,issues",
-		"GITHUB_TOOLS":                 "get_file_contents",
-		"GITHUB_DYNAMIC_TOOLSETS":      "1",
-		"GITHUB_READ_ONLY":             "1",
-		"GITHUB_LOCKDOWN_MODE":         "1",
-	}
-
-	for key, expectedValue := range expectedEnvs {
-		if !slices.Contains(mock.capturedEnv, key+"="+expectedValue) {
-			t.Errorf("Expected env var %s=%s not found in %v", key, expectedValue, mock.capturedEnv)
-		}
-	}
-}
-
-func TestOptionalEnvironmentVariablesNotSet(t *testing.T) {
-	// Ensure env vars are not set.
-	t.Setenv("GITHUB_TOOLSETS", "")
-	t.Setenv("GITHUB_TOOLS", "")
-	t.Setenv("GITHUB_DYNAMIC_TOOLSETS", "")
-	t.Setenv("GITHUB_READ_ONLY", "")
-	t.Setenv("GITHUB_LOCKDOWN_MODE", "")
-
-	mock := &mockRunner{
-		authDetails: &authDetails{
-			Host:  "https://github.com",
-			Token: "test-token",
-		},
-	}
-
-	err := runWithRunner(t.Context(), mock)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Check that only required env vars are present.
-	requiredEnvs := map[string]string{
-		"GITHUB_PERSONAL_ACCESS_TOKEN": "test-token",
-		"GITHUB_HOST":                  "https://github.com",
-	}
-
-	if len(mock.capturedEnv) != len(requiredEnvs) {
-		t.Errorf(
-			"Expected %d env vars, got %d: %v",
-			len(requiredEnvs),
-			len(mock.capturedEnv),
-			mock.capturedEnv,
-		)
-	}
-
-	for key, expectedValue := range requiredEnvs {
-		if !slices.Contains(mock.capturedEnv, key+"="+expectedValue) {
-			t.Errorf("Expected env var %s=%s not found in %v", key, expectedValue, mock.capturedEnv)
-		}
-	}
-}
-
-func TestRunWithRunnerRejectsInvalidServerEnvValue(t *testing.T) {
-	t.Run("invalid token", func(t *testing.T) {
-		mock := &mockRunner{
-			authDetails: &authDetails{
-				Host:  "https://github.com",
-				Token: "test-token\ninvalid",
-			},
-		}
-
-		err := runWithRunner(t.Context(), mock)
-		if err == nil {
-			t.Fatal("expected error for invalid token env value")
-		}
-		if !errors.Is(err, ErrInvalidServerEnvValue) {
-			t.Fatalf("expected ErrInvalidServerEnvValue, got: %v", err)
-		}
-		if mock.runServerCalled {
-			t.Fatal("runServer called with invalid token env value")
-		}
-	})
-
-	t.Run("invalid optional env", func(t *testing.T) {
-		t.Setenv("GITHUB_TOOLSETS", "repos,issues\npull_requests")
-
-		mock := &mockRunner{
-			authDetails: &authDetails{
-				Host:  "https://github.com",
-				Token: "test-token",
-			},
-		}
-
-		err := runWithRunner(t.Context(), mock)
-		if err == nil {
-			t.Fatal("expected error for invalid optional env value")
-		}
-		if !errors.Is(err, ErrInvalidServerEnvValue) {
-			t.Fatalf("expected ErrInvalidServerEnvValue, got: %v", err)
-		}
-		if mock.runServerCalled {
-			t.Fatal("runServer called with invalid optional env value")
-		}
-	})
-}
-
-func TestParseLogLevel(t *testing.T) {
-	tests := []struct {
-		name     string
-		envValue string
-		expected slog.Level
-	}{
-		{"default when unset", "", slog.LevelInfo},
-		{"debug level", "DEBUG", slog.LevelDebug},
-		{"info level", "INFO", slog.LevelInfo},
-		{"warn level", "WARN", slog.LevelWarn},
-		{"error level", "ERROR", slog.LevelError},
-		{"case insensitive", "debug", slog.LevelDebug},
-		{"invalid value fallback", "INVALID", slog.LevelInfo},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("LOG_LEVEL", tt.envValue)
-
-			result := parseLogLevel()
-			if result != tt.expected {
-				t.Errorf("parseLogLevel() = %v, want %v", result, tt.expected)
-			}
-		})
+func TestEmbeddedLockIsValid(t *testing.T) {
+	if _, err := artifact.ParseLock(lockData); err != nil {
+		t.Fatalf("server.lock.json: %v", err)
 	}
 }

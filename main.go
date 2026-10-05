@@ -1,150 +1,160 @@
+// Command gh-mcp runs the bundled github-mcp-server with gh's credentials.
 package main
 
 import (
-	"context"
+	"embed"
 	"errors"
 	"fmt"
-	"log/slog"
+	"io"
+	"io/fs"
 	"os"
-	"os/signal"
-	"strings"
-	"syscall"
+	"path/filepath"
+	"runtime"
+
+	"github.com/cli/go-gh/v2/pkg/auth"
+	"github.com/shuymn/gh-mcp/internal/artifact"
+	"github.com/shuymn/gh-mcp/internal/identity"
+	"github.com/shuymn/gh-mcp/internal/launch"
 )
 
-// ErrInvalidServerEnvValue is returned when an environment value is unsafe for process execution.
-var ErrInvalidServerEnvValue = errors.New("invalid server environment value")
+//go:embed server.lock.json
+var lockData []byte
+
+// payload holds payload/server.archive in release builds. It is staged per
+// platform by `go run ./tools/lock stage` and absent in plain `go build`.
+//
+//go:embed all:payload
+var payload embed.FS
+
+const payloadArchive = "payload/server.archive"
+
+// launcher is everything gh-mcp needs from its environment.
+type launcher struct {
+	args    []string
+	environ []string
+	goos    string
+	goarch  string
+	debug   bool
+	stderr  io.Writer
+
+	lock      []byte
+	archive   func() ([]byte, error)
+	cacheRoot func() (string, error)
+	identity  identity.Source
+	exec      func(path string, args, env []string) (int, error)
+}
 
 func main() {
-	os.Exit(mainRun())
+	os.Exit(launcher{
+		args:      os.Args[1:],
+		environ:   os.Environ(),
+		goos:      runtime.GOOS,
+		goarch:    runtime.GOARCH,
+		debug:     os.Getenv("GH_MCP_DEBUG") != "",
+		stderr:    os.Stderr,
+		lock:      lockData,
+		archive:   readPayload,
+		cacheRoot: defaultCacheRoot,
+		identity:  identity.Source{DefaultHost: auth.DefaultHost, TokenForHost: auth.TokenForHost},
+		exec:      launch.Exec,
+	}.run())
 }
 
-func parseLogLevel() slog.Level {
-	levelStr := os.Getenv("LOG_LEVEL")
-	if levelStr == "" {
-		return slog.LevelInfo
-	}
-
-	var level slog.Level
-	if err := level.UnmarshalText([]byte(strings.ToUpper(levelStr))); err != nil {
-		return slog.LevelInfo
-	}
-
-	return level
-}
-
-func mainRun() int {
-	// Set up a context that listens for termination signals
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	// Initialize slog with text handler for CLI output
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: parseLogLevel(),
-	}))
-	slog.SetDefault(logger)
-
-	if err := run(ctx); err != nil {
-		slog.ErrorContext(ctx, "Error", "err", err)
-		return 1
-	}
-	return 0
-}
-
-// runner interface for dependency injection
-type runner interface {
-	getAuth() (*authDetails, error)
-	runServer(
-		ctx context.Context,
-		env []string,
-		streams *ioStreams,
-	) error
-}
-
-// realRunner implements runner using actual implementations
-type realRunner struct{}
-
-func (r *realRunner) getAuth() (*authDetails, error) {
-	return getAuthDetails(&realAuth{})
-}
-
-func (r *realRunner) runServer(
-	ctx context.Context,
-	env []string,
-	streams *ioStreams,
-) error {
-	return runBundledServer(ctx, env, streams)
-}
-
-func run(ctx context.Context) error {
-	return runWithRunner(ctx, &realRunner{})
-}
-
-func runWithRunner(ctx context.Context, r runner) error {
-	// 1. Get Auth
-	slog.InfoContext(ctx, "🔐 Retrieving GitHub credentials...")
-	auth, err := r.getAuth()
+func (l launcher) run() int {
+	code, err := l.launch()
 	if err != nil {
-		return err
+		fmt.Fprintf(l.stderr, "gh-mcp: %v\n", err)
 	}
-	slog.InfoContext(ctx, "✅ Authenticated", "host", auth.Host)
 
-	// 2. Validate bundled server version before startup.
-	slog.InfoContext(ctx, "📦 Preparing bundled MCP server...", "version", mcpServerVersion)
+	return code
+}
 
-	// 3. Prepare environment
-	var env []string
-	env, err = appendServerEnv(env, "GITHUB_PERSONAL_ACCESS_TOKEN", auth.Token)
+func (l launcher) launch() (int, error) {
+	id, err := identity.Resolve(l.identity)
 	if err != nil {
-		return err
+		return 1, err
 	}
-	env, err = appendServerEnv(env, "GITHUB_HOST", auth.Host)
+
+	lock, err := artifact.ParseLock(l.lock)
 	if err != nil {
-		return err
+		return 1, err
+	}
+	platform, err := lock.Platform(l.goos, l.goarch)
+	if err != nil {
+		return 1, err
 	}
 
-	// Pass through optional environment variables if they are set
-	optionalEnvVars := []string{
-		"GITHUB_TOOLSETS",
-		"GITHUB_TOOLS",
-		"GITHUB_DYNAMIC_TOOLSETS",
-		"GITHUB_READ_ONLY",
-		"GITHUB_LOCKDOWN_MODE",
+	root, err := l.cacheRoot()
+	if err != nil {
+		return 1, err
+	}
+	archive, err := l.archive()
+	if err != nil {
+		return 1, err
+	}
+	env, err := launch.Env(l.environ, l.goos, id.Host, id.Token)
+	if err != nil {
+		return 1, err
 	}
 
-	for _, envVar := range optionalEnvVars {
-		if value := os.Getenv(envVar); value != "" {
-			env, err = appendServerEnv(env, envVar, value)
-			if err != nil {
-				return err
-			}
+	l.debugf("host=%s server=%s", id.Host, lock.Version)
+
+	cache := artifact.Cache{Root: root}
+	for attempt := 1; ; attempt++ {
+		code, err := l.ensureAndExec(cache, platform, archive, env)
+		// Another launcher may prune a long-unused digest between Ensure and
+		// exec. Only a vanished file is retried, and only once; with no
+		// embedded archive the retry cannot reinstall and reports ErrNotBundled.
+		if attempt < 2 && errors.Is(err, fs.ErrNotExist) {
+			l.debugf("server executable vanished; preparing it again: %v", err)
+			continue
 		}
-	}
+		if errors.Is(err, artifact.ErrNotBundled) {
+			return code, fmt.Errorf("%w; build with `task build`", err)
+		}
 
-	// 4. Run the bundled server and stream I/O.
-	slog.InfoContext(ctx, "✅ Ready! Starting MCP server...")
-	if err := r.runServer(ctx, env, defaultIOStreams()); err != nil {
-		return err
+		return code, err
 	}
-
-	slog.InfoContext(ctx, "👋 Session ended.")
-	return nil
 }
 
-func appendServerEnv(env []string, key, value string) ([]string, error) {
-	if err := validateServerEnvValue(key, value); err != nil {
-		return nil, err
+func (l launcher) ensureAndExec(
+	cache artifact.Cache,
+	platform artifact.Platform,
+	archive []byte,
+	env []string,
+) (int, error) {
+	path, err := cache.Ensure(platform, l.goos, archive)
+	if err != nil {
+		return 1, err
 	}
+	l.debugf("path=%s", path)
 
-	return append(env, key+"="+value), nil
+	return l.exec(path, launch.Args(l.args), env)
 }
 
-func validateServerEnvValue(key, value string) error {
-	if strings.ContainsRune(value, '\x00') {
-		return fmt.Errorf("%w: %s contains NUL byte", ErrInvalidServerEnvValue, key)
+func (l launcher) debugf(format string, args ...any) {
+	if l.debug {
+		fmt.Fprintf(l.stderr, "gh-mcp: "+format+"\n", args...)
 	}
-	if strings.ContainsAny(value, "\r\n") {
-		return fmt.Errorf("%w: %s contains line break", ErrInvalidServerEnvValue, key)
+}
+
+func readPayload() ([]byte, error) {
+	data, err := payload.ReadFile(payloadArchive)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read bundled archive: %w", err)
 	}
 
-	return nil
+	return data, nil
+}
+
+func defaultCacheRoot() (string, error) {
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to locate user cache directory: %w", err)
+	}
+
+	return filepath.Join(dir, "gh-mcp"), nil
 }
