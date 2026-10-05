@@ -12,7 +12,7 @@ A GitHub CLI extension that seamlessly runs the [github-mcp-server](https://gith
 
 ## Platform Support
 
-`gh-mcp` runtime support is limited to platforms where bundled `github-mcp-server` archives are available:
+`gh-mcp` is released for the platforms where upstream publishes `github-mcp-server` archives:
 
 - `darwin/amd64`
 - `darwin/arm64`
@@ -22,8 +22,6 @@ A GitHub CLI extension that seamlessly runs the [github-mcp-server](https://gith
 - `windows/386`
 - `windows/amd64`
 - `windows/arm64`
-
-Release assets may still include additional targets produced by `cli/gh-extension-precompile` (for example `freebsd-*` and `linux/arm`), but those targets are not supported by `gh-mcp` runtime because no bundled `github-mcp-server` binary is available for them.
 
 ## Installation
 
@@ -54,17 +52,13 @@ Add this to your MCP client configuration:
 }
 ```
 
-With environment variables:
+With server options:
 
 ```json
 {
   "github": {
     "command": "gh",
-    "args": ["mcp"],
-    "env": {
-      "GITHUB_TOOLSETS": "repos,issues,pull_requests",
-      "GITHUB_READ_ONLY": "1"
-    }
+    "args": ["mcp", "--toolsets=repos,issues,pull_requests", "--read-only"]
   }
 }
 ```
@@ -77,10 +71,10 @@ To add this as an MCP server to Claude Code:
 claude mcp add-json github '{"command":"gh","args":["mcp"]}'
 ```
 
-With environment variables:
+With server options:
 
 ```bash
-claude mcp add-json github '{"command":"gh","args":["mcp"],"env":{"GITHUB_TOOLSETS":"repos,issues","GITHUB_READ_ONLY":"1"}}'
+claude mcp add-json github '{"command":"gh","args":["mcp","--toolsets=repos,issues","--read-only"]}'
 ```
 
 ### Running Directly
@@ -92,96 +86,93 @@ gh mcp
 ```
 
 This will:
-1. 🔐 Retrieve your GitHub credentials from `gh` CLI
-2. 📦 Extract and verify the bundled MCP server binary
-3. 🚀 Start the MCP server with your credentials
-4. Stream I/O between your terminal and the server process
+1. Retrieve your GitHub credentials from `gh` CLI
+2. Use the verified `github-mcp-server` from the cache, extracting the bundled copy on first run
+3. Replace itself with `github-mcp-server stdio`, so stdio, signals, and the exit code belong to the server
 
-Press `Ctrl+C` to gracefully shut down the server.
+`gh-mcp` prints nothing unless something fails. Set `GH_MCP_DEBUG=1` to print the host, server version, and executable path.
 
 ## Configuration
 
-The extension passes through several environment variables to configure the MCP server:
+`gh-mcp` does not define its own server options. Everything you pass reaches `github-mcp-server stdio` unchanged, so every upstream option works, including ones added after this release.
+
+### Arguments
+
+Arguments after `gh mcp` are appended to `github-mcp-server stdio`:
+
+```bash
+gh mcp --toolsets=repos,issues --read-only
+gh mcp --exclude-tools=delete_file --lockdown-mode
+```
+
+Run `gh mcp --help` to see the options of the bundled server.
+
+### Environment Variables
+
+Every `GITHUB_*` variable is forwarded, so the upstream environment equivalents work too:
+
+```bash
+GITHUB_TOOLSETS="repos,issues,pull_requests" gh mcp
+GITHUB_READ_ONLY=1 gh mcp
+GITHUB_EXCLUDE_TOOLS=delete_file gh mcp
+```
+
+The server lists every tool in the enabled toolsets, even ones your `gh` token lacks scopes for. Use `--toolsets`, `--tools`, or `--exclude-tools` to narrow the list.
+
+`gh-mcp` always sets `GITHUB_PERSONAL_ACCESS_TOKEN` and `GITHUB_HOST` from `gh` and never forwards `GITHUB_TOKEN` or `GITHUB_ENTERPRISE_TOKEN`.
 
 ### Process Environment Trust Model
 
-`gh-mcp` starts `github-mcp-server` with a minimal child-process environment:
+The server receives a minimal environment:
 
-- Required `GITHUB_*` variables are set by `gh-mcp`
-- Only a fixed allowlist from the parent process is forwarded (`PATH`, temp-dir vars, proxy/cert vars)
+- `GITHUB_PERSONAL_ACCESS_TOKEN` and `GITHUB_HOST`, set by `gh-mcp`
+- Other `GITHUB_*` variables from the parent process
+- A fixed allowlist: `PATH`, home and temp-dir variables, proxy and certificate variables
 
 Proxy variables are intentionally forwarded to support enterprise networks. If you run `gh mcp` from an untrusted wrapper process, clear proxy/certificate variables before launch.
-
-### Toolsets
-Control which GitHub API toolsets are available:
-
-```bash
-# Enable specific toolsets
-GITHUB_TOOLSETS="repos,issues,pull_requests" gh mcp
-
-# Enable all toolsets
-GITHUB_TOOLSETS="all" gh mcp
-```
-
-### Dynamic Toolset Discovery
-Enable dynamic toolset discovery (beta feature):
-
-```bash
-GITHUB_DYNAMIC_TOOLSETS=1 gh mcp
-```
-
-### Read-Only Mode
-Run the server in read-only mode to prevent modifications:
-
-```bash
-GITHUB_READ_ONLY=1 gh mcp
-```
-
-### Combining Options
-You can combine multiple options:
-
-```bash
-GITHUB_READ_ONLY=1 GITHUB_TOOLSETS="repos,issues" gh mcp
-```
 
 ## How It Works
 
 1. The extension retrieves your GitHub credentials from your existing `gh` CLI authentication
-2. It validates the bundled archive against a pinned SHA256 and extracts the `github-mcp-server` binary for your platform
-3. Your credentials are securely passed to the server process
-4. The temporary extracted binary is automatically removed when you exit
+2. `server.lock.json` pins the upstream version and the SHA256 of the server executable for each platform
+3. The executable is cached at `<user cache dir>/gh-mcp/servers/<sha256>/`. Each launch re-hashes it; a missing or modified file is replaced from the archive bundled in `gh-mcp`. After installing a new version, `gh-mcp` removes cached versions that have not been used for 7 days
+4. `gh-mcp` replaces itself with the server (on Windows it runs the server and waits)
 
 ## Troubleshooting
 
-### "Not logged in to GitHub"
+### "not logged in to GitHub"
 Run `gh auth login` to authenticate with GitHub first.
 
-### "failed to get default host"
+### "gh has no default host"
 No default GitHub host is configured in `gh`. Run `gh auth status` and authenticate/select a default account.
 
 ### "no bundled github-mcp-server for platform"
-Your OS/architecture is not supported by bundled runtime assets. Check [Platform Support](#platform-support) and use a supported target.
+Your OS/architecture is not supported. Check [Platform Support](#platform-support).
 
-### "Bundled binary checksum mismatch"
-The bundled binary did not pass integrity verification. Reinstall or upgrade the extension.
+### "this build does not bundle github-mcp-server"
+You built `gh-mcp` with plain `go build`. Build with `task build`, or install a release with `gh extension install shuymn/gh-mcp`.
 
-### "bundled temp parent directory is insecure"
-The cache parent directory for extracted binaries failed ownership/permission checks. On Unix-like systems, ensure your user owns the cache path and that permissions are private (for example, `0700`).
+### "github-mcp-server digest mismatch"
+The bundled archive does not match `server.lock.json`. Reinstall or upgrade the extension.
 
-### "server exited with non-zero status: `<code>`"
-The bundled `github-mcp-server` started but returned an error. Check MCP client configuration and `GITHUB_*` environment values.
+### "cache directory is insecure"
+A cache directory is a symbolic link, is owned by another user, or is accessible to other users. Remove `<user cache dir>/gh-mcp` and run `gh mcp` again.
 
 ### "invalid server environment value"
-One of the forwarded environment values contains a line break or NUL byte. Remove control characters from `GITHUB_*` values before running `gh mcp`.
+The token or host from `gh` contains a line break or NUL byte. Check `gh auth status`.
+
+### Upgrading from v3
+- `LOG_LEVEL` no longer has an effect. Use `GH_MCP_DEBUG=1`.
+- Arguments after `gh mcp` are now passed to the server instead of being ignored.
+- All `GITHUB_*` variables are forwarded. `GITHUB_DYNAMIC_TOOLSETS` was removed upstream and has no effect.
 
 ## Security
 
 - Your GitHub token is never stored by this extension
 - Credentials are passed to the server process via environment variables
-- Runtime integrity: bundled archives are verified with embedded SHA256 before execution
-- Supply-chain integrity: release update scripts verify GitHub release attestations before pinning SHA256 values in source
-- Trust model note: runtime does not re-run attestation checks; it relies on pinned hashes generated during release asset preparation
-- No data persists after the session ends
+- Supply-chain integrity: CI verifies `server.lock.json` against the release attestation of the upstream checksums file, and release binaries carry build-provenance attestations (`gh attestation verify <binary> --repo shuymn/gh-mcp`)
+- Runtime integrity: the cached executable is checked against the locked SHA256 on every launch
+- Threat model: the cache must be a private directory owned by you. A process running as your user is out of scope, because it can read the `gh` token directly
 
 ## Contributing
 

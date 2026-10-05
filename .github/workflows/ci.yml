@@ -30,43 +30,28 @@ jobs:
           go-version: stable
           cache: true
 
-      - name: Verify release transition and upstream order
+      - name: Verify release transition
         env:
           BASE_SHA: >-
             ${{ github.event_name == 'pull_request' &&
             github.event.pull_request.base.sha || github.event.before }}
           GH_TOKEN: ${{ github.token }}
-        run: ./scripts/workflows/validate-release-transition.sh
+        run: go run ./tools/release validate -base-ref "$BASE_SHA"
 
-      - name: Restore bundled assets cache
-        id: bundled-cache
+      - name: Restore upstream archives cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: bundled/github-mcp-server_*
-          key: bundled-assets-${{ hashFiles('bundle_*.go', 'mcp_version.go') }}
-          enableCrossOsArchive: true
+          path: .cache/upstream
+          key: upstream-${{ hashFiles('server.lock.json') }}
 
-      - name: Prepare bundled assets
-        if: steps.bundled-cache.outputs.cache-hit != 'true'
-        run: go run ./scripts/prepare
+      - name: Verify server lock against attested upstream release
         env:
           GH_TOKEN: ${{ github.token }}
-
-      - name: Verify bundled assets
-        run: go run ./scripts/prepare -check
+        run: go run ./tools/lock verify
 
       - name: Set golangci-lint version
         id: set-golangci-lint-version
         run: echo "version=$(yq '.vars.GOLANGCI_LINT_VERSION' Taskfile.yml)" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Task
-        uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
-
-      - name: Check shell scripts
-        run: task shell:check
-
-      - name: Test workflow scripts
-        run: task shell:test
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
@@ -102,23 +87,6 @@ jobs:
         with:
           go-version: stable
           cache: true
-
-      - name: Restore bundled assets cache
-        id: bundled-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: bundled/github-mcp-server_*
-          key: bundled-assets-${{ hashFiles('bundle_*.go', 'mcp_version.go') }}
-          enableCrossOsArchive: true
-
-      - name: Prepare bundled assets
-        if: steps.bundled-cache.outputs.cache-hit != 'true'
-        run: go run ./scripts/prepare
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-      - name: Verify bundled assets
-        run: go run ./scripts/prepare -check
 
       - name: Download dependencies
         run: go mod download
@@ -156,22 +124,16 @@ jobs:
           go-version: stable
           cache: true
 
-      - name: Restore bundled assets cache
-        id: bundled-cache
+      - name: Restore upstream archives cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: bundled/github-mcp-server_*
-          key: bundled-assets-${{ hashFiles('bundle_*.go', 'mcp_version.go') }}
-          enableCrossOsArchive: true
+          path: .cache/upstream
+          key: upstream-${{ hashFiles('server.lock.json') }}
 
-      - name: Prepare bundled assets
-        if: steps.bundled-cache.outputs.cache-hit != 'true'
-        run: go run ./scripts/prepare
+      - name: Stage bundled archive
         env:
           GH_TOKEN: ${{ github.token }}
-
-      - name: Verify bundled assets
-        run: go run ./scripts/prepare -check
+        run: go run ./tools/lock stage
 
       - name: Build binary
         run: go build -o gh-mcp .

@@ -34,102 +34,55 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.target_sha }}
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Select release
-        id: candidate
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TARGET_SHA: ${{ inputs.target_sha }}
-        shell: bash
-        run: scripts/workflows/release.sh select
-
-      - name: Restore published provenance verification
-        if: steps.candidate.outputs.published == 'true'
-        id: provenance-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .release-provenance
-          key: >-
-            release-provenance-${{ steps.candidate.outputs.tag }}-${{
-            steps.candidate.outputs.tag_target }}-${{
-            hashFiles('scripts/workflows/release.sh',
-            '.github/workflows/release.yml') }}
-
-      - name: Verify published release provenance
-        if: >-
-          steps.candidate.outputs.published == 'true' &&
-          steps.provenance-cache.outputs.cache-hit != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.candidate.outputs.tag }}
-          SOURCE_DIGEST: ${{ steps.candidate.outputs.tag_target }}
-        shell: bash
-        run: scripts/workflows/release.sh verify-published
-
       - name: Set up Go
-        if: steps.candidate.outputs.publish == 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
 
-      - name: Restore bundled assets cache
-        if: steps.candidate.outputs.publish == 'true'
-        id: bundled-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: bundled/github-mcp-server_*
-          key: bundled-assets-${{ hashFiles('bundle_*.go', 'mcp_version.go') }}
-          enableCrossOsArchive: true
-
-      - name: Prepare bundled assets
-        if: >-
-          steps.candidate.outputs.publish == 'true' &&
-          steps.bundled-cache.outputs.cache-hit != 'true'
+      # Skips releases that are already published. A release whose CI finished
+      # after a newer one is still published, without taking "latest".
+      - name: Plan release
+        id: plan
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          go run ./scripts/prepare
-
-      - name: Verify bundled assets
-        if: steps.candidate.outputs.publish == 'true'
-        run: go run ./scripts/prepare -check
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: go run ./tools/release plan -target-sha "$TARGET_SHA"
 
       - name: Create release tag
-        if: steps.candidate.outputs.create_tag == 'true'
+        if: steps.plan.outputs.create_tag == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.candidate.outputs.tag }}
+          RELEASE_TAG: ${{ steps.plan.outputs.tag }}
           TARGET_SHA: ${{ inputs.target_sha }}
-        shell: bash
-        run: scripts/workflows/release.sh create-tag
+        run: >-
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs"
+          -f "ref=refs/tags/${RELEASE_TAG}" -f "sha=${TARGET_SHA}" >/dev/null
 
+      - name: Restore upstream archives cache
+        if: steps.plan.outputs.publish == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/upstream
+          key: upstream-${{ hashFiles('server.lock.json') }}
+
+      # A rerun uploads into the existing draft, so a failed job can be retried.
       - name: Build draft release
-        if: steps.candidate.outputs.publish == 'true'
+        if: steps.plan.outputs.publish == 'true'
         uses: cli/gh-extension-precompile@76961aa3bd1123d0a6fd42d0a41aca0696937c39 # v2.2.0
         with:
+          build_script_override: scripts/build-dist.sh
           draft_release: true
           generate_attestations: true
           go_version_file: go.mod
-          release_tag: ${{ steps.candidate.outputs.tag }}
-
-      - name: Verify draft release provenance
-        if: steps.candidate.outputs.publish == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.candidate.outputs.tag }}
-          SOURCE_DIGEST: ${{ inputs.target_sha }}
-        shell: bash
-        run: scripts/workflows/release.sh verify-draft
+          release_tag: ${{ steps.plan.outputs.tag }}
 
       - name: Publish release
-        if: steps.candidate.outputs.publish == 'true'
+        if: steps.plan.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.candidate.outputs.tag }}
-        shell: bash
-        run: gh release edit "${RELEASE_TAG:?}" --draft=false
+          RELEASE_TAG: ${{ steps.plan.outputs.tag }}
+          LATEST: ${{ steps.plan.outputs.latest }}
+        run: gh release edit "${RELEASE_TAG:?}" --draft=false --latest="${LATEST:?}"

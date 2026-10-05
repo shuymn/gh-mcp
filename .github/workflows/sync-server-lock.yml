@@ -1,0 +1,121 @@
+name: Sync server lock
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths: [server.lock.json]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-server-lock-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    if: >-
+      github.event.pull_request.user.login == 'renovate[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'renovate/github-github-mcp-server-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # Tools run from the trusted base; the Renovate head is only read as data.
+      - name: Checkout trusted base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          persist-credentials: false
+
+      - name: Checkout Renovate head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: trusted/go.mod
+          cache-dependency-path: trusted/go.sum
+          cache: true
+
+      - name: Restrict changes to release metadata
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          unexpected="$(git -C candidate diff --name-only "$BASE_SHA" HEAD | grep -vxE 'server\.lock\.json|VERSION' || true)"
+          if [[ -n "$unexpected" ]]; then
+            echo "::error::Renovate head changes files other than server.lock.json and VERSION: ${unexpected}"
+            exit 1
+          fi
+
+      - name: Sync lock digests and VERSION
+        id: sync
+        working-directory: trusted
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          go run ./tools/lock sync -lock ../candidate/server.lock.json
+          release="$(go run ./tools/release next -dir ../candidate -base-ref "$BASE_SHA" -write)"
+          echo "release=${release}" >>"$GITHUB_OUTPUT"
+          if git -C ../candidate diff --quiet; then
+            echo "changed=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Create repository-scoped app token
+        if: steps.sync.outputs.changed == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      # The main ruleset requires signed commits. GitHub signs commits that an
+      # app creates through the API, and the app token makes the update trigger
+      # CI. The ref update is not forced, so it fails if the Renovate head moved
+      # after the sync and a stale result is never pushed.
+      - name: Commit synced metadata
+        if: steps.sync.outputs.changed == 'true'
+        working-directory: candidate
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RELEASE: ${{ steps.sync.outputs.release }}
+        run: |
+          repo="repos/${GITHUB_REPOSITORY}"
+          blob() {
+            jq -n --rawfile content "$1" '{content: $content, encoding: "utf-8"}' |
+              gh api "${repo}/git/blobs" --input - --jq .sha
+          }
+          lock_blob="$(blob server.lock.json)"
+          version_blob="$(blob VERSION)"
+          base_tree="$(gh api "${repo}/git/commits/${HEAD_SHA}" --jq .tree.sha)"
+          tree="$(
+            jq -n --arg base "$base_tree" --arg lock "$lock_blob" --arg version "$version_blob" '{
+              base_tree: $base,
+              tree: [
+                {path: "server.lock.json", mode: "100644", type: "blob", sha: $lock},
+                {path: "VERSION", mode: "100644", type: "blob", sha: $version}
+              ]
+            }' | gh api "${repo}/git/trees" --input - --jq .sha
+          )"
+          commit="$(
+            jq -n --arg message "chore: prepare release ${RELEASE}" --arg tree "$tree" --arg parent "$HEAD_SHA" \
+              '{message: $message, tree: $tree, parents: [$parent]}' |
+              gh api "${repo}/git/commits" --input - --jq .sha
+          )"
+          gh api --method PATCH "${repo}/git/refs/heads/${HEAD_REF}" -f "sha=${commit}" -F force=false >/dev/null
