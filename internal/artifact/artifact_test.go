@@ -279,11 +279,26 @@ func TestEnsureRetainsOtherVersionsForPendingLaunches(t *testing.T) {
 	}
 }
 
+// age makes the cache entry holding path (an executable or an entry
+// directory) look last used `by` ago.
 func age(t *testing.T, path string, by time.Duration) {
 	t.Helper()
 
+	dir := path
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		dir = filepath.Dir(path)
+	}
 	old := time.Now().Add(-by)
-	if err := os.Chtimes(path, old, old); err != nil {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if err := os.Chtimes(filepath.Join(dir, entry.Name()), old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Chtimes(dir, old, old); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -385,7 +400,8 @@ func TestEnsureConcurrentFirstRun(t *testing.T) {
 		wg.Go(func() {
 			path, err := cache.Ensure(p, testGOOS, archive)
 			if err == nil {
-				if got, _ := os.ReadFile(path); string(got) != "server-v1" {
+				var got []byte
+				if got, err = os.ReadFile(path); err == nil && string(got) != "server-v1" {
 					err = errors.New("incomplete executable: " + string(got))
 				}
 			}

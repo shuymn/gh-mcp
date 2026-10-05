@@ -96,9 +96,11 @@ the way. It knows only the `stdio` subcommand and the `GITHUB_PERSONAL_ACCESS_TO
 
 1. **Identity** resolves gh's default host and token with `github.com/cli/go-gh/v2`.
 2. **Artifact** looks up the locked executable digest for the platform. The executable lives
-   at `<user cache>/gh-mcp/servers/<sha256>/`. On a cache hit gh-mcp re-hashes it and updates
-   its modification time to record the use; on a miss it extracts the embedded archive to a
-   temporary file, checks the digest, and renames it into place. After a fresh install only,
+   at `<user cache>/gh-mcp/servers/<sha256>/`. On a cache hit gh-mcp re-hashes it and touches
+   a `.last-used` marker beside it (never the executable: on Windows that would block
+   concurrent launches). On a miss it extracts the embedded archive to a temporary file,
+   checks the digest, and hard-links it into place, so a valid executable is never replaced
+   while another launcher may be reading or running it. After a fresh install only,
    it removes other digests unused for 7 days, best effort: anything it cannot remove stays,
    and cleanup never fails the launch.
    This lowers the chance of deleting an executable another launcher is about to run but does

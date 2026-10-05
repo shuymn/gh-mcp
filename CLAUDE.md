@@ -66,7 +66,8 @@ variables; user arguments and `GITHUB_*` variables pass through untouched.
 1. **`internal/identity`**: gh's default host and token via `github.com/cli/go-gh/v2`.
 2. **`internal/artifact`**: parses `server.lock.json`, extracts archives, and keeps verified
    executables in a content-addressed cache (`<user cache>/gh-mcp/servers/<sha256>/`).
-   Installs go through a temp file and rename. Cache hits refresh the mtime; a fresh install
+   Installs go through a temp file and a hard link that never replaces a valid executable
+   (Windows cannot replace open files). Cache hits touch a `.last-used` marker; a fresh install
    prunes other digests unused for 7 days (`StaleAfter`), best effort. `main.go` repeats
    Ensure + exec once when the executable vanished (`fs.ErrNotExist`), and nothing else.
 3. **`internal/launch`**: builds args (`stdio` + user args) and env (base allowlist +

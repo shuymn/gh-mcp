@@ -157,10 +157,7 @@ func TestEnsureIgnoresUndeletableStaleVersions(t *testing.T) {
 		t.Fatal(err)
 	}
 	staleDir := filepath.Dir(stalePath)
-	old := time.Now().Add(-artifact.StaleAfter - time.Hour)
-	if err := os.Chtimes(stalePath, old, old); err != nil {
-		t.Fatal(err)
-	}
+	age(t, stalePath, artifact.StaleAfter+time.Hour)
 	// Without write permission the executable inside cannot be removed.
 	if err := os.Chmod(staleDir, 0o500); err != nil {
 		t.Fatal(err)
