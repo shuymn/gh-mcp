@@ -135,7 +135,8 @@ Every stable `github-mcp-server` release gets exactly one gh-mcp release. Upstre
    PRs have auto-merge enabled.
 2. `Sync server lock` runs trusted tools from the base commit. It refuses PRs that touch
    anything but `server.lock.json` and `VERSION`, records the attested digests, computes
-   `VERSION`, and pushes one commit with the app token so CI runs again.
+   `VERSION`, and creates one commit through the API with the app token. GitHub signs it,
+   as the `main` ruleset requires, and CI runs again.
 3. CI verifies the lock against the attested release and checks two rules. `VERSION` must
    follow the bump rule: an upstream major, minor, or patch update bumps the same component
    of gh-mcp. The new upstream version must also be the next published stable release after

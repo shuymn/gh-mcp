@@ -79,7 +79,8 @@ variables; user arguments and `GITHUB_*` variables pass through untouched.
 5. **Release automation**:
    - `server.lock.json` is the single source for the upstream version, supported platforms,
      and digests. Renovate bumps its version; `.github/workflows/sync-server-lock.yml` runs
-     trusted base tools to record attested digests and `VERSION`, then pushes with the app token
+     trusted base tools to record attested digests and `VERSION`, then creates one
+     app-signed commit through the API (the `main` ruleset requires signed commits)
    - Every upstream release gets one gh-mcp release: Renovate proposes each version on its own
      branch, and `tools/release validate` rejects a lock update that skips a published release
    - Renovate auto-merges minor/patch updates after required CI; majors need review
