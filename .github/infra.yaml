@@ -111,9 +111,13 @@ spec:
         - actions/cache@*
         - actions/checkout@*
         - actions/create-github-app-token@*
+        # Used internally by k1LoW/octocov-action.
+        - actions/github-script@*
         - actions/setup-go@*
         - actions/upload-artifact@*
         - cli/gh-extension-precompile@*
         - golangci/golangci-lint-action@*
+        # Used internally by k1LoW/octocov-action.
+        - k1LoW/gh-setup@*
         - k1LoW/octocov-action@*
     fork_pr_approval: all_external_contributors
