@@ -5,6 +5,7 @@ linters:
     - depguard
     - cyclop
     - exhaustruct
+    - exhaustruct_v5
     - forbidigo
     - funlen
     - godot
