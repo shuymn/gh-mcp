@@ -49,6 +49,14 @@
       "automerge": true
     },
     {
+      "description": "GitHub Actions versioning does not support semver comparison ranges",
+      "matchManagers": ["github-actions"],
+      "matchDepTypes": ["action", "workflow"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchCurrentVersion": "/^v?[1-9]\\d*(?:\\.|$)/",
+      "automerge": true
+    },
+    {
       "matchDatasources": ["github-releases"],
       "matchPackageNames": ["github/github-mcp-server"],
       "matchUpdateTypes": ["minor", "patch"],
