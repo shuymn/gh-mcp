@@ -1,5 +1,5 @@
 {
-  "version": "v2.0.1",
+  "version": "v2.0.2",
   "platforms": {
     "darwin/amd64": {
       "asset": "github-mcp-server_Darwin_x86_64.tar.gz",
