@@ -1,45 +1,45 @@
 {
-  "version": "v2.0.2",
+  "version": "v2.0.3",
   "platforms": {
     "darwin/amd64": {
       "asset": "github-mcp-server_Darwin_x86_64.tar.gz",
-      "archive_sha256": "7ac4d549e0bf37ad9efee7be7913cae4ad50cea8d9d5be1afa9a6dbcee9d1f2c",
-      "binary_sha256": "2d623f340472cc5ab12d6007411e989e020028e3919fbb521fe40ade0b6de9ac"
+      "archive_sha256": "115350858c3287843274efbf45e821d98f15d3304cb2c074740461ed32b45598",
+      "binary_sha256": "c88bc8ac2556a75cb0ee63d4f0d473e638b97da4479738451c0328eee8cecb5d"
     },
     "darwin/arm64": {
       "asset": "github-mcp-server_Darwin_arm64.tar.gz",
-      "archive_sha256": "5d9b38511bffc84d2272eb6189129eb721c8900e45784d8ea7eaf25f8d3dd835",
-      "binary_sha256": "2d431e46617f06b1516818fa09917096ff6dfc3664b37b0bdb31e1c1a35be368"
+      "archive_sha256": "5c95c01f75a7ec2370607e989b2968d314b02a54d78af8a9fdf38f3dfe6135f4",
+      "binary_sha256": "6164cef7e4d022bd99e5d3003e82740f1c4a3cd58dd1eee98c83a4c9d9ccc7a3"
     },
     "linux/386": {
       "asset": "github-mcp-server_Linux_i386.tar.gz",
-      "archive_sha256": "da9c113519f4c24e469706cff55cfd4519bedef06662590a4ce1cd262cec2652",
-      "binary_sha256": "5377332c7b051368073959f1015ea8a99f3996af9797a5d327f929a9d0c50742"
+      "archive_sha256": "8c7e4320b5b66220f7a1cb61262d1557f5cea2a216d789d04e5f230ce767e282",
+      "binary_sha256": "e4993f35aff6ef61b19ae734b7d516c1a4d962852f23bd32ab7b0f6208c873fa"
     },
     "linux/amd64": {
       "asset": "github-mcp-server_Linux_x86_64.tar.gz",
-      "archive_sha256": "815e27d931c796af0c97f24fd211e14f8a4607d4528377719a5ad2352086b0b0",
-      "binary_sha256": "721ffbb573397d8e95b847f7a1908359fd2973784ca8a8d5d3182db6f9fcb5b6"
+      "archive_sha256": "f797c20fe02a755865d0e2d46184ab47e31bf1619b0855b8d89c531e45a651c2",
+      "binary_sha256": "13608f06cb754be101a87ea5ebeb9ed15e632d3f709ba3b3e5866f3fc7970c70"
     },
     "linux/arm64": {
       "asset": "github-mcp-server_Linux_arm64.tar.gz",
-      "archive_sha256": "73f5e76c6a3b5e0d731e1134a7c38575df6ec96c646192095a3be2d4d0d6c1fc",
-      "binary_sha256": "0a211b6024b049c278a1078e75bfdc095a70de3d45e9bedd94852a7ee3b73472"
+      "archive_sha256": "5d2ddc71273fec8917e8f42cf19f26a6bd7acbb679b3a57de2917018b2eadf82",
+      "binary_sha256": "f8293e996624d4669ec25bc4aa8130995dfd912055feb439d363d0259c5651b4"
     },
     "windows/386": {
       "asset": "github-mcp-server_Windows_i386.zip",
-      "archive_sha256": "1287ecec01623a5a83b3d203c343f8b0ed326ea4514d595899afd2dfd627e480",
-      "binary_sha256": "2a480b344acde61f35c5b089f1cd30ae7f95be8741948a289be9c2b01f5a0e49"
+      "archive_sha256": "403d779c7fc4d1ebb2cfa0a6f31c977eef0b9d78fd91b2c158074913caee3d67",
+      "binary_sha256": "d0670286e2292ed8dfa58eb3ecdd889f5bd1892b3f98cd88d99fe26d5b44378e"
     },
     "windows/amd64": {
       "asset": "github-mcp-server_Windows_x86_64.zip",
-      "archive_sha256": "4ae64087501650752f21c9d5af5378107a5116d94ee1cf37786b22b8c4bd99df",
-      "binary_sha256": "1bbf1cd5be216d5c622ccb0da4529d747c983fcf6bbf76f9c3e6c3b32877c1df"
+      "archive_sha256": "f0e1b9880a1b88730d1250d1c25cfee39617ec3e800a7a252f2279cd0c8394e0",
+      "binary_sha256": "647fe7e7f3c1296d1acb936b5c7704bbcdb6bda95b4533c524157446b33f0f16"
     },
     "windows/arm64": {
       "asset": "github-mcp-server_Windows_arm64.zip",
-      "archive_sha256": "2156aeb05e76006ea379269c786de86b00e66a99009227331432068f81ceb684",
-      "binary_sha256": "60939878c22ecd44478dbf0e98163572573d1b150a6c9226d4a3fb72560c0ea6"
+      "archive_sha256": "d1321c411023c9a08e7709c2e9689551e3bff5a57033a3e5ff5f2c1db0c67a6f",
+      "binary_sha256": "80635432799fc86ee019e5cd361391d13ee93170e2e3f075dcec1405807488d1"
     }
   }
 }
